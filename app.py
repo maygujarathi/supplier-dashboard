@@ -3,245 +3,294 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from datetime import datetime
 
 st.set_page_config(
-    page_title="Lieferantenbewertung",
+    page_title="Supplier Evaluation Dashboard",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # =========================================================
-# STYLING
+# PREMIUM STYLING - REFINED ENTERPRISE AESTHETIC
 # =========================================================
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap');
+
+    * {
+        font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
     .stApp {
-        background-color: #f4f7fb;
+        background: linear-gradient(135deg, #0a0e27 0%, #10111f 50%, #0d0f22 100%);
+        color: #e5e7eb;
     }
 
     .block-container {
-        max-width: 1500px;
-        padding-top: 1.1rem;
-        padding-bottom: 1rem;
+        padding-top: 1.5rem;
+        padding-bottom: 1.5rem;
+        max-width: 1600px;
     }
 
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
-        border-right: 1px solid rgba(255,255,255,0.08);
+        background: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, rgba(13, 15, 34, 0.95) 100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(10px);
     }
 
-    section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] .stMarkdown,
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] span,
-    section[data-testid="stSidebar"] div {
-        color: white !important;
+    section[data-testid="stSidebar"] * {
+        color: #e5e7eb !important;
     }
 
-    .page-title {
-        font-size: 2.2rem;
-        font-weight: 800;
-        color: #111827;
-        margin-bottom: 0.2rem;
-        letter-spacing: -0.02em;
+    .main-header {
+        font-size: 3rem;
+        font-weight: 900;
+        background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.3rem;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
     }
 
-    .page-subtitle {
-        color: #6b7280;
-        font-size: 1rem;
-        margin-bottom: 1rem;
+    .main-subtitle {
+        font-size: 0.95rem;
+        color: #9ca3af;
+        font-weight: 500;
+        margin-bottom: 2rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
     }
 
-    .main-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 18px;
-        box-shadow: 0 6px 20px rgba(15,23,42,0.05);
-        padding: 18px 18px 16px 18px;
-        color: #111827 !important;
+    .premium-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(25, 35, 50, 0.4) 100%);
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(20px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .main-card * {
-        color: #111827 !important;
+    .premium-card:hover {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(25, 35, 50, 0.6) 100%);
+        border-color: rgba(148, 163, 184, 0.25);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }
 
     .metric-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 18px;
-        box-shadow: 0 5px 18px rgba(15,23,42,0.05);
-        padding: 16px 18px;
-        min-height: 110px;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(25, 35, 50, 0.3) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.15);
+        border-radius: 14px;
+        padding: 20px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px);
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: all 0.3s ease;
+    }
+
+    .metric-card:hover {
+        border-color: rgba(96, 165, 250, 0.3);
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(25, 35, 50, 0.5) 100%);
     }
 
     .metric-label {
-        color: #6b7280;
-        font-size: 0.9rem;
-        margin-bottom: 8px;
+        font-size: 0.85rem;
+        color: #9ca3af;
         font-weight: 600;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
     }
 
     .metric-value {
-        color: #111827;
-        font-size: 2rem;
+        font-size: 2.4rem;
         font-weight: 800;
-        line-height: 1.0;
+        background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.2;
     }
 
     .metric-sub {
-        margin-top: 8px;
+        margin-top: 12px;
         color: #6b7280;
-        font-size: 0.83rem;
+        font-size: 0.82rem;
+        font-weight: 500;
     }
 
-    .section-title {
-        color: #111827;
-        font-size: 1.2rem;
-        font-weight: 800;
+    .supplier-item {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(25, 35, 50, 0.2) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.1);
+        border-radius: 12px;
+        padding: 16px;
         margin-bottom: 12px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
     }
 
-    .supplier-row {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 16px;
-        padding: 14px;
-        box-shadow: 0 3px 14px rgba(15,23,42,0.04);
-        margin-bottom: 10px;
+    .supplier-item:hover {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(25, 35, 50, 0.4) 100%);
+        border-color: rgba(96, 165, 250, 0.25);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
     }
 
     .supplier-name {
-        color: #111827;
-        font-weight: 800;
-        font-size: 1rem;
-        margin-bottom: 4px;
+        font-weight: 700;
+        color: #f1f5f9;
+        font-size: 1.05rem;
+        margin-bottom: 6px;
     }
 
     .supplier-meta {
-        color: #6b7280;
-        font-size: 0.9rem;
-        margin-bottom: 10px;
+        color: #9ca3af;
+        font-size: 0.85rem;
+        font-weight: 500;
     }
 
-    .pill {
+    .badge {
         display: inline-block;
-        border-radius: 999px;
-        padding: 5px 10px;
-        font-size: 0.82rem;
-        font-weight: 700;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
         margin-right: 6px;
         margin-bottom: 4px;
     }
 
-    .pill-green {
-        background: #dcfce7;
-        color: #166534 !important;
+    .badge-success {
+        background: rgba(34, 197, 94, 0.15);
+        color: #86efac;
+        border: 1px solid rgba(34, 197, 94, 0.3);
     }
 
-    .pill-amber {
-        background: #fef3c7;
-        color: #92400e !important;
+    .badge-warning {
+        background: rgba(251, 146, 60, 0.15);
+        color: #fed7aa;
+        border: 1px solid rgba(251, 146, 60, 0.3);
     }
 
-    .pill-red {
-        background: #fee2e2;
-        color: #991b1b !important;
+    .badge-danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: #fca5a5;
+        border: 1px solid rgba(239, 68, 68, 0.3);
     }
 
-    .pill-blue {
-        background: #dbeafe;
-        color: #1d4ed8 !important;
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #f1f5f9;
+        margin-bottom: 18px;
+        letter-spacing: -0.01em;
     }
 
-    .info-line {
-        color: #111827;
-        font-size: 1rem;
-        margin-bottom: 8px;
-        font-weight: 600;
+    .insight-box {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+        border-radius: 12px;
+        padding: 16px;
+        color: #d1fae5;
+        margin-bottom: 12px;
+        backdrop-filter: blur(10px);
     }
 
-    .info-muted {
-        color: #6b7280 !important;
-        font-size: 0.92rem;
+    .warning-box {
+        background: linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(251, 146, 60, 0.04) 100%);
+        border: 1px solid rgba(251, 146, 60, 0.2);
+        border-radius: 12px;
+        padding: 16px;
+        color: #ffedd5;
+        margin-bottom: 12px;
+        backdrop-filter: blur(10px);
     }
 
-    .status-box-good {
-        background: #ecfdf5;
-        border: 1px solid #a7f3d0;
-        color: #065f46 !important;
-        border-radius: 14px;
-        padding: 12px 14px;
-        font-weight: 600;
-        margin-bottom: 10px;
-    }
-
-    .status-box-mid {
-        background: #fffbeb;
-        border: 1px solid #fde68a;
-        color: #92400e !important;
-        border-radius: 14px;
-        padding: 12px 14px;
-        font-weight: 600;
-        margin-bottom: 10px;
-    }
-
-    .status-box-bad {
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-        color: #991b1b !important;
-        border-radius: 14px;
-        padding: 12px 14px;
-        font-weight: 600;
-        margin-bottom: 10px;
-    }
-
-    div[data-testid="stMetric"] {
-        background: white;
-        border: 1px solid #e5e7eb;
-        padding: 14px 16px;
-        border-radius: 16px;
-        box-shadow: 0 4px 14px rgba(15,23,42,0.05);
-    }
-
-    div[data-testid="stMetricLabel"] {
-        color: #6b7280 !important;
-        font-weight: 700 !important;
-    }
-
-    div[data-testid="stMetricValue"] {
-        color: #111827 !important;
-        font-weight: 800 !important;
+    .critical-box {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 12px;
+        padding: 16px;
+        color: #fecaca;
+        margin-bottom: 12px;
+        backdrop-filter: blur(10px);
     }
 
     .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
+        gap: 8px;
+        background: transparent;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
     }
 
     .stTabs [data-baseweb="tab"] {
-        height: 46px;
-        border-radius: 12px;
-        background: #e9eef9;
-        color: #1f2937;
-        font-weight: 700;
-        padding-left: 16px;
-        padding-right: 16px;
+        height: 44px;
+        border-radius: 8px 8px 0 0;
+        background: transparent;
+        color: #9ca3af;
+        font-weight: 600;
+        padding: 0 18px;
+        font-size: 0.95rem;
+        transition: all 0.3s ease;
+        border: none;
     }
 
     .stTabs [aria-selected="true"] {
-        background: white !important;
-        color: #2563eb !important;
-        border: 1px solid #dbeafe !important;
-        box-shadow: 0 3px 10px rgba(37,99,235,0.12);
+        background: linear-gradient(135deg, rgba(96, 165, 250, 0.15) 0%, rgba(96, 165, 250, 0.08) 100%) !important;
+        color: #60a5fa !important;
+        border-bottom: 2px solid #3b82f6 !important;
     }
 
     .stButton > button {
-        border-radius: 12px;
-        background: #2563eb;
+        border-radius: 10px;
+        border: 1px solid rgba(96, 165, 250, 0.3);
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white;
-        border: 1px solid #2563eb;
-        font-weight: 700;
+        font-weight: 600;
+        padding: 10px 20px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
+
+    .stButton > button:hover {
+        border-color: rgba(96, 165, 250, 0.5);
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        transform: translateY(-2px);
+    }
+
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(25, 35, 50, 0.3) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.15);
+        padding: 16px;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    div[data-testid="stMetric"] label {
+        color: #9ca3af !important;
+        font-weight: 600 !important;
+    }
+
+    div[data-testid="stMetric"] > div:nth-child(2) {
+        color: #60a5fa !important;
+        font-size: 2rem !important;
+        font-weight: 800 !important;
+    }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.3); }
+    ::-webkit-scrollbar-thumb { background: rgba(96, 165, 250, 0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(96, 165, 250, 0.5); }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .premium-card, .metric-card { animation: fadeInUp 0.6s ease-out; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -261,467 +310,427 @@ def to_numeric_safe(df, cols):
 def normalize_anomaly_flag(value):
     if pd.isna(value):
         return 0
-    v = str(value).strip().lower()
-    return 1 if v in {"yes", "ja", "y", "true", "1", "kritisch"} else 0
+    return 1 if str(value).strip().lower() in {"yes","ja","y","true","1","kritisch"} else 0
 
-def calc_anomalies(row):
+def calculate_anomalies(row):
     count = 0
-    if pd.notna(row.get("Liefertreue")) and row["Liefertreue"] < 95:
-        count += 1
-    if pd.notna(row.get("Lieferzeit")) and row["Lieferzeit"] > 10:
-        count += 1
-    if pd.notna(row.get("Qualitätsrate")) and row["Qualitätsrate"] < 97:
-        count += 1
-    if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0:
-        count += 1
-    if pd.notna(row.get("Preisabweichung")) and abs(row["Preisabweichung"]) > 1.0:
-        count += 1
+    if pd.notna(row.get("Liefertreue"))      and row["Liefertreue"]      < 95:  count += 1
+    if pd.notna(row.get("Lieferzeit"))        and row["Lieferzeit"]        > 10:  count += 1
+    if pd.notna(row.get("Qualitätsrate"))     and row["Qualitätsrate"]     < 97:  count += 1
+    if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0: count += 1
+    if pd.notna(row.get("Preisabweichung"))   and abs(row["Preisabweichung"]) > 1.0: count += 1
     return count
 
-def calc_score(row):
-    score = 100.0
-    if pd.notna(row.get("Liefertreue")) and row["Liefertreue"] < 95:
-        score -= (95 - row["Liefertreue"]) * 1.8
-    if pd.notna(row.get("Lieferzeit")) and row["Lieferzeit"] > 10:
-        score -= (row["Lieferzeit"] - 10) * 2.0
-    if pd.notna(row.get("Qualitätsrate")) and row["Qualitätsrate"] < 97:
-        score -= (97 - row["Qualitätsrate"]) * 2.5
-    if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0:
-        score -= (row["Reklamationsquote"] - 1.0) * 8.0
-    if pd.notna(row.get("Preisabweichung")) and abs(row["Preisabweichung"]) > 1.0:
-        score -= (abs(row["Preisabweichung"]) - 1.0) * 3.5
-    if pd.notna(row.get("Anomalien")):
-        score -= row["Anomalien"] * 0.5
-    return max(round(score, 1), 0)
+def calculate_score(row):
+    s = 100.0
+    if pd.notna(row.get("Liefertreue"))      and row["Liefertreue"]      < 95:  s -= (95  - row["Liefertreue"])      * 1.8
+    if pd.notna(row.get("Lieferzeit"))        and row["Lieferzeit"]        > 10:  s -= (row["Lieferzeit"]  - 10)       * 2.0
+    if pd.notna(row.get("Qualitätsrate"))     and row["Qualitätsrate"]     < 97:  s -= (97  - row["Qualitätsrate"])    * 2.5
+    if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0: s -= (row["Reklamationsquote"] - 1.0) * 8
+    if pd.notna(row.get("Preisabweichung"))   and abs(row["Preisabweichung"]) > 1.0: s -= (abs(row["Preisabweichung"]) - 1.0) * 3.5
+    if pd.notna(row.get("Anomalien")):        s -= row["Anomalien"] * 0.5
+    return max(round(s, 1), 0)
 
 def risk_level(score):
-    if score >= 90:
-        return "Niedrig"
-    elif score >= 75:
-        return "Mittel"
-    return "Hoch"
+    return "Low" if score >= 90 else "Medium" if score >= 75 else "High"
 
-def status_text(score):
-    if score >= 90:
-        return "Sehr gut"
-    elif score >= 75:
-        return "Beobachten"
-    return "Kritisch"
+def status_label(score):
+    return "Excellent" if score >= 90 else "Monitor" if score >= 75 else "Critical"
 
 def critical_kpi(row):
     problems = {
-        "Liefertreue": 95 - row["Liefertreue"] if pd.notna(row.get("Liefertreue")) and row["Liefertreue"] < 95 else 0,
-        "Lieferzeit": row["Lieferzeit"] - 10 if pd.notna(row.get("Lieferzeit")) and row["Lieferzeit"] > 10 else 0,
-        "Qualitätsrate": 97 - row["Qualitätsrate"] if pd.notna(row.get("Qualitätsrate")) and row["Qualitätsrate"] < 97 else 0,
-        "Reklamationsquote": row["Reklamationsquote"] - 1.0 if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0 else 0,
-        "Preisabweichung": abs(row["Preisabweichung"]) - 1.0 if pd.notna(row.get("Preisabweichung")) and abs(row["Preisabweichung"]) > 1.0 else 0,
+        "Delivery":   (95  - row["Liefertreue"])        if pd.notna(row.get("Liefertreue"))      and row["Liefertreue"]      < 95  else 0,
+        "Lead Time":  (row["Lieferzeit"]  - 10)          if pd.notna(row.get("Lieferzeit"))        and row["Lieferzeit"]        > 10  else 0,
+        "Quality":    (97  - row["Qualitätsrate"])        if pd.notna(row.get("Qualitätsrate"))     and row["Qualitätsrate"]     < 97  else 0,
+        "Complaints": (row["Reklamationsquote"] - 1.0)   if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0 else 0,
+        "Price Dev.": (abs(row["Preisabweichung"]) - 1.0) if pd.notna(row.get("Preisabweichung"))  and abs(row["Preisabweichung"]) > 1.0 else 0,
     }
     m = max(problems, key=problems.get)
-    return m if problems[m] > 0 else "Kein kritischer KPI"
+    return m if problems[m] > 0 else "None"
 
-def supplier_reason(row):
-    reasons = []
-    if row["Liefertreue"] >= 95:
-        reasons.append("starke Liefertreue")
-    if row["Qualitätsrate"] >= 97:
-        reasons.append("hohe Qualitätsleistung")
-    if row["Lieferzeit"] <= 10:
-        reasons.append("kurze Lieferzeit")
-    if row["Reklamationsquote"] <= 1.0:
-        reasons.append("niedrige Reklamationsquote")
-    if abs(row["Preisabweichung"]) <= 1.0:
-        reasons.append("stabile Preisabweichung")
-    return ", ".join(reasons[:3]) if reasons else "gemischtes Leistungsprofil"
+def supplier_strengths(row):
+    r = []
+    if row["Liefertreue"]      >= 95:  r.append("strong delivery")
+    if row["Qualitätsrate"]    >= 97:  r.append("excellent quality")
+    if row["Lieferzeit"]       <= 10:  r.append("fast lead time")
+    if row["Reklamationsquote"]<= 1.0: r.append("low complaints")
+    if abs(row["Preisabweichung"]) <= 1.0: r.append("stable pricing")
+    return ", ".join(r[:3]) if r else "mixed profile"
 
-def pill_status(score):
-    if score >= 90:
-        return "pill-green"
-    elif score >= 75:
-        return "pill-amber"
-    return "pill-red"
-
-def box_status(score):
-    if score >= 90:
-        return "status-box-good"
-    elif score >= 75:
-        return "status-box-mid"
-    return "status-box-bad"
+def score_color(score):
+    return "#22c55e" if score >= 90 else "#f59e0b" if score >= 75 else "#ef4444"
 
 def donut_chart(value, color):
     fig = go.Figure(go.Pie(
         values=[value, max(0, 100 - value)],
-        labels=["Score", ""],
-        hole=0.78,
-        marker_colors=[color, "#e5e7eb"],
-        textinfo="none",
-        sort=False
+        hole=0.72,
+        marker_colors=[color, "rgba(148,163,184,0.1)"],
+        textinfo="none", sort=False, hoverinfo="skip",
     ))
     fig.update_layout(
         showlegend=False,
         margin=dict(t=0, l=0, r=0, b=0),
-        paper_bgcolor="white",
+        paper_bgcolor="rgba(0,0,0,0)",
         annotations=[dict(
-            text=f"<b>{value:.1f}</b><br><span style='font-size:12px;color:#6b7280'>von 100</span>",
-            x=0.5, y=0.5, showarrow=False, font_size=28
-        )]
+            text=f"<b style='font-size:32px;color:{color}'>{value:.0f}</b><br>"
+                 f"<span style='font-size:12px;color:#9ca3af'>out of 100</span>",
+            x=0.5, y=0.5, showarrow=False, font_size=20,
+        )],
     )
     return fig
 
-def score_color(score):
-    if score >= 90:
-        return "#16a34a"
-    elif score >= 75:
-        return "#f59e0b"
-    return "#ef4444"
+def plotly_dark_layout(**kwargs):
+    base = dict(
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#9ca3af"),
+        margin=dict(t=40, b=40, l=40, r=40),
+    )
+    base.update(kwargs)
+    return base
 
 # =========================================================
 # HEADER
 # =========================================================
-st.markdown('<div class="page-title">Lieferantenbewertung</div>', unsafe_allow_html=True)
-st.markdown('<div class="page-subtitle">KPI-Monitoring · Anomalieerkennung · Procurement Performance Dashboard</div>', unsafe_allow_html=True)
+h1, h2 = st.columns([0.7, 0.3])
+with h1:
+    st.markdown('<div class="main-header">Supplier Evaluation Dashboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-subtitle">🔍 Performance Analytics · Risk Assessment · KPI Monitoring</div>', unsafe_allow_html=True)
+with h2:
+    st.write("")
+    st.markdown(
+        f'<p style="text-align:right;color:#6b7280;font-size:0.9rem;">Last updated: {datetime.now().strftime("%d.%m.%Y %H:%M")}</p>',
+        unsafe_allow_html=True,
+    )
+st.markdown("---")
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR — UPLOAD
 # =========================================================
 with st.sidebar:
-    st.markdown("## Datenquelle")
-    uploaded_file = st.file_uploader("Excel-Datei hochladen", type=["xlsx", "xls"])
+    st.markdown('<div class="section-title" style="margin-top:1rem;">📊 Data Source</div>', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx", "xls"])
 
 if uploaded_file is None:
-    st.info("Bitte lade eine Excel-Datei in der Sidebar hoch.")
+    st.info("👈 Please upload an Excel file in the sidebar to get started.")
     st.stop()
 
-raw_df = pd.read_excel(uploaded_file)
-raw_df = clean_columns(raw_df)
-all_cols = ["-- Nicht vorhanden --"] + list(raw_df.columns)
+raw_df = clean_columns(pd.read_excel(uploaded_file))
+all_cols = ["-- Not available --"] + list(raw_df.columns)
+
+def idx(name):
+    return all_cols.index(name) if name in all_cols else 0
 
 with st.sidebar:
-    st.markdown("## Spaltenzuordnung")
-    supplier_col = st.selectbox("Supplier", all_cols, index=all_cols.index("Supplier_Name") if "Supplier_Name" in all_cols else 0)
-    country_col = st.selectbox("Country", all_cols, index=all_cols.index("Country") if "Country" in all_cols else 0)
-    material_col = st.selectbox("Material", all_cols, index=all_cols.index("Category") if "Category" in all_cols else 0)
-    delivery_col = st.selectbox("Liefertreue", all_cols, index=all_cols.index("Delivery_Performance_%") if "Delivery_Performance_%" in all_cols else 0)
-    leadtime_col = st.selectbox("Lieferzeit", all_cols, index=all_cols.index("Lead_Time_Days") if "Lead_Time_Days" in all_cols else 0)
-    quality_col = st.selectbox("Qualitätsrate", all_cols, index=all_cols.index("Quality_Score_%") if "Quality_Score_%" in all_cols else 0)
-    complaint_col = st.selectbox("Reklamationsquote", all_cols, index=all_cols.index("Complaint_Rate_%") if "Complaint_Rate_%" in all_cols else 0)
-    price_col = st.selectbox("Preisabweichung", all_cols, index=all_cols.index("Price_Deviation_%") if "Price_Deviation_%" in all_cols else 0)
-    score_col = st.selectbox("Score (optional)", all_cols, index=all_cols.index("Overall_Score") if "Overall_Score" in all_cols else 0)
-    status_col = st.selectbox("Status (optional)", all_cols, index=all_cols.index("Status") if "Status" in all_cols else 0)
-    anomaly_col = st.selectbox("Anomaly Flag (optional)", all_cols, index=all_cols.index("Anomaly_Flag") if "Anomaly_Flag" in all_cols else 0)
-    supplier_id_col = st.selectbox("Supplier ID (optional)", all_cols, index=all_cols.index("Supplier_ID") if "Supplier_ID" in all_cols else 0)
-    load_data = st.button("Dashboard laden", use_container_width=True)
+    st.markdown('<div class="section-title">🔗 Column Mapping</div>', unsafe_allow_html=True)
+    supplier_col    = st.selectbox("Supplier",             all_cols, index=idx("Supplier_Name"))
+    country_col     = st.selectbox("Country",              all_cols, index=idx("Country"))
+    material_col    = st.selectbox("Material / Category",  all_cols, index=idx("Category"))
+    delivery_col    = st.selectbox("On-Time Delivery %",   all_cols, index=idx("Delivery_Performance_%"))
+    leadtime_col    = st.selectbox("Lead Time (Days)",     all_cols, index=idx("Lead_Time_Days"))
+    quality_col     = st.selectbox("Quality Score %",      all_cols, index=idx("Quality_Score_%"))
+    complaint_col   = st.selectbox("Complaint Rate %",     all_cols, index=idx("Complaint_Rate_%"))
+    price_col       = st.selectbox("Price Deviation %",    all_cols, index=idx("Price_Deviation_%"))
+    score_col       = st.selectbox("Score (optional)",     all_cols, index=idx("Overall_Score"))
+    status_col      = st.selectbox("Status (optional)",    all_cols, index=idx("Status"))
+    anomaly_col     = st.selectbox("Anomaly Flag (opt.)",  all_cols, index=idx("Anomaly_Flag"))
+    supplier_id_col = st.selectbox("Supplier ID (opt.)",   all_cols, index=idx("Supplier_ID"))
+    st.markdown("")
+    load_data = st.button("📈 Load Dashboard", use_container_width=True)
 
 if not load_data:
     st.stop()
 
-required = {
-    "Supplier": supplier_col,
-    "Country": country_col,
-    "Material": material_col,
-    "Liefertreue": delivery_col,
-    "Lieferzeit": leadtime_col,
-    "Qualitätsrate": quality_col,
-    "Reklamationsquote": complaint_col,
-    "Preisabweichung": price_col,
+# =========================================================
+# VALIDATE & BUILD DATAFRAME
+# =========================================================
+required_map = {
+    "Supplier": supplier_col, "Country": country_col, "Material": material_col,
+    "Liefertreue": delivery_col, "Lieferzeit": leadtime_col, "Qualitätsrate": quality_col,
+    "Reklamationsquote": complaint_col, "Preisabweichung": price_col,
 }
-
-missing = [k for k, v in required.items() if v == "-- Nicht vorhanden --"]
+missing = [k for k, v in required_map.items() if v == "-- Not available --"]
 if missing:
-    st.error(f"Bitte ordne alle Pflichtfelder zu: {', '.join(missing)}")
+    st.error(f"⚠️ Please map all required fields: {', '.join(missing)}")
     st.stop()
 
-mapping = {
-    supplier_col: "Supplier",
-    country_col: "Country",
-    material_col: "Material",
-    delivery_col: "Liefertreue",
-    leadtime_col: "Lieferzeit",
-    quality_col: "Qualitätsrate",
-    complaint_col: "Reklamationsquote",
-    price_col: "Preisabweichung",
-}
-
-optional = {
-    score_col: "Score",
-    status_col: "Status",
-    anomaly_col: "Anomaly_Flag",
-    supplier_id_col: "Supplier_ID",
-}
-
-for src, tgt in optional.items():
-    if src != "-- Nicht vorhanden --":
+mapping = {v: k for k, v in required_map.items()}
+for src, tgt in {score_col:"Score", status_col:"Status", anomaly_col:"Anomaly_Flag", supplier_id_col:"Supplier_ID"}.items():
+    if src != "-- Not available --":
         mapping[src] = tgt
 
 df = raw_df.rename(columns=mapping).copy()
-
 if "Supplier_ID" not in df.columns:
-    df["Supplier_ID"] = [f"S{i+1:02d}" for i in range(len(df))]
+    df["Supplier_ID"] = [f"S{i+1:04d}" for i in range(len(df))]
 
-df = to_numeric_safe(df, ["Liefertreue", "Lieferzeit", "Qualitätsrate", "Reklamationsquote", "Preisabweichung", "Score"])
-df = df.dropna(subset=["Supplier", "Country", "Material", "Liefertreue", "Lieferzeit", "Qualitätsrate", "Reklamationsquote", "Preisabweichung"])
+df = to_numeric_safe(df, ["Liefertreue","Lieferzeit","Qualitätsrate","Reklamationsquote","Preisabweichung","Score"])
+df = df.dropna(subset=list(required_map.keys()))
 
-if "Anomaly_Flag" in df.columns:
-    df["Anomalien"] = df["Anomaly_Flag"].apply(normalize_anomaly_flag)
-else:
-    df["Anomalien"] = df.apply(calc_anomalies, axis=1)
+df["Anomalien"]     = df["Anomaly_Flag"].apply(normalize_anomaly_flag) if "Anomaly_Flag" in df.columns else df.apply(calculate_anomalies, axis=1)
+if "Score"  not in df.columns: df["Score"]  = df.apply(calculate_score,  axis=1)
+if "Status" not in df.columns: df["Status"] = df["Score"].apply(status_label)
 
-if "Score" not in df.columns:
-    df["Score"] = df.apply(calc_score, axis=1)
-
-if "Status" not in df.columns:
-    df["Status"] = df["Score"].apply(status_text)
-
-df["Risikostufe"] = df["Score"].apply(risk_level)
-df["Kritischer KPI"] = df.apply(critical_kpi, axis=1)
-df["Begründung"] = df.apply(supplier_reason, axis=1)
+df["Risk"]     = df["Score"].apply(risk_level)
+df["Crit_KPI"] = df.apply(critical_kpi, axis=1)
+df["Strengths"]= df.apply(supplier_strengths, axis=1)
 
 agg = df.groupby("Supplier", as_index=False).agg({
-    "Supplier_ID": "first",
-    "Material": "first",
-    "Country": "first",
-    "Liefertreue": "mean",
-    "Lieferzeit": "mean",
-    "Qualitätsrate": "mean",
-    "Reklamationsquote": "mean",
-    "Preisabweichung": "mean",
-    "Score": "mean",
-    "Anomalien": "sum",
-    "Status": "first",
-    "Risikostufe": "first",
-    "Kritischer KPI": "first",
-    "Begründung": "first",
-})
+    "Supplier_ID":"first","Material":"first","Country":"first",
+    "Liefertreue":"mean","Lieferzeit":"mean","Qualitätsrate":"mean",
+    "Reklamationsquote":"mean","Preisabweichung":"mean",
+    "Score":"mean","Anomalien":"sum",
+    "Status":"first","Risk":"first","Crit_KPI":"first","Strengths":"first",
+}).sort_values("Score", ascending=False).reset_index(drop=True)
 agg["Score"] = agg["Score"].round(1)
-agg = agg.sort_values("Score", ascending=False).reset_index(drop=True)
 
 # =========================================================
-# FILTERS
+# SIDEBAR — FILTERS
 # =========================================================
 with st.sidebar:
-    st.markdown("## Filter")
-    materials = ["Alle"] + sorted(agg["Material"].dropna().astype(str).unique().tolist())
-    selected_material = st.selectbox("Material filtern", materials)
+    st.markdown('<div class="section-title" style="margin-top:2rem;">🎯 Filters</div>', unsafe_allow_html=True)
+    materials = ["All"] + sorted(agg["Material"].astype(str).dropna().unique().tolist())
+    sel_mat   = st.selectbox("Material Category", materials)
+    filtered  = agg if sel_mat == "All" else agg[agg["Material"] == sel_mat]
+    sel_sup   = st.selectbox("Select Supplier", filtered["Supplier"].tolist())
 
-filtered = agg.copy()
-if selected_material != "Alle":
-    filtered = filtered[filtered["Material"] == selected_material]
-
-with st.sidebar:
-    selected_supplier = st.selectbox("Lieferant auswählen", filtered["Supplier"].tolist())
-
-selected = filtered[filtered["Supplier"] == selected_supplier].iloc[0]
+sel = filtered[filtered["Supplier"] == sel_sup].iloc[0]
 
 # =========================================================
-# TOP METRICS
+# TOP KPI CARDS
 # =========================================================
-m1, m2, m3, m4, m5 = st.columns(5)
-cards = [
-    ("Lieferanten", filtered["Supplier"].nunique(), "im aktuellen Filter"),
-    ("Ø Score", f"{filtered['Score'].mean():.1f}", "durchschnittliche Bewertung"),
-    ("Anomalien", int(filtered["Anomalien"].sum()), "gesamt im Portfolio"),
-    ("Top Material", filtered["Material"].mode().iloc[0] if not filtered.empty else "-", "häufigste Kategorie"),
-    ("Bester Lieferant", filtered.iloc[0]["Supplier"] if not filtered.empty else "-", "höchster Score"),
-]
-
-for col, (label, value, sub) in zip([m1, m2, m3, m4, m5], cards):
+st.markdown("")
+for col, (icon, label, value, sub) in zip(
+    st.columns(5),
+    [
+        ("📦", "Suppliers",    filtered["Supplier"].nunique(),                                      "in portfolio"),
+        ("⭐", "Avg Score",    f"{filtered['Score'].mean():.1f}",                                   "overall rating"),
+        ("⚠️", "Anomalies",   int(filtered["Anomalien"].sum()),                                    "detected"),
+        ("📂", "Top Material", filtered["Material"].mode().iloc[0] if not filtered.empty else "-",  "category"),
+        ("🏆", "Top Supplier", filtered.iloc[0]["Supplier"]        if not filtered.empty else "-",  "highest score"),
+    ],
+):
     with col:
         st.markdown(f"""
         <div class="metric-card">
+            <div style="font-size:1.5rem;margin-bottom:8px;">{icon}</div>
             <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
+            <div class="metric-value" style="font-size:1.8rem;">{value}</div>
             <div class="metric-sub">{sub}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        </div>""", unsafe_allow_html=True)
 
-st.write("")
+st.markdown("")
 
 # =========================================================
 # TABS
 # =========================================================
-tab1, tab2, tab3, tab4 = st.tabs(["Übersicht", "Ranking & Insights", "Visual Analytics", "Lieferantendetails"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📊 Overview", "🎯 Rankings & Insights", "📈 Analytics", "👤 Supplier Profile", "📋 Details"]
+)
 
+# ── TAB 1: OVERVIEW ──────────────────────────────────────
 with tab1:
-    left, center, right = st.columns([1.15, 1.45, 1.0])
+    c_left, c_mid, c_right = st.columns([1.2, 1.3, 0.95])
 
-    with left:
-        st.markdown('<div class="main-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Top Lieferanten</div>', unsafe_allow_html=True)
-
-        for _, row in filtered.head(6).iterrows():
-            pill_cls = pill_status(row["Score"])
-            anomaly_cls = "pill-red" if row["Anomalien"] > 0 else "pill-green"
+    with c_left:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">🏆 Top Suppliers</div>', unsafe_allow_html=True)
+        for rank, (_, row) in enumerate(filtered.head(6).iterrows(), 1):
+            lvl = "success" if row["Score"] >= 90 else "warning" if row["Score"] >= 75 else "danger"
+            ano_badge = (
+                f'<span class="badge badge-danger">⚠️ {int(row["Anomalien"])} Anomalies</span>'
+                if row["Anomalien"] > 0 else
+                '<span class="badge badge-success">✓ No Issues</span>'
+            )
             st.markdown(f"""
-            <div class="supplier-row">
-                <div class="supplier-name">{row['Supplier']}</div>
-                <div class="supplier-meta">{row['Material']} · {row['Country']}</div>
-                <span class="pill {pill_cls}">Score {row['Score']}</span>
-                <span class="pill {anomaly_cls}">{int(row['Anomalien'])} Anomalien</span>
-            </div>
-            """, unsafe_allow_html=True)
-
+            <div class="supplier-item">
+                <div style="display:flex;justify-content:space-between;align-items:start;">
+                    <div>
+                        <div class="supplier-name">#{rank} {row['Supplier']}</div>
+                        <div class="supplier-meta">{row['Material']} · {row['Country']}</div>
+                    </div>
+                    <span class="badge badge-{lvl}" style="font-size:0.9rem;font-weight:700;">{row['Score']}</span>
+                </div>
+                <div style="margin-top:8px;">{ano_badge}</div>
+            </div>""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with center:
-        st.markdown('<div class="main-card">', unsafe_allow_html=True)
-        st.markdown(f'<div class="section-title">{selected["Supplier"]}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Lieferanten-ID: <span class="info-muted">{selected["Supplier_ID"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Kategorie: <span class="info-muted">{selected["Material"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Land: <span class="info-muted">{selected["Country"]}</span></div>', unsafe_allow_html=True)
-
-        c1, c2 = st.columns(2)
-        c3, c4 = st.columns(2)
-        c5, c6 = st.columns(2)
-
-        c1.metric("Liefertreue", f"{selected['Liefertreue']:.1f}%")
-        c2.metric("Qualitätsrate", f"{selected['Qualitätsrate']:.1f}%")
-        c3.metric("Lieferzeit", f"{selected['Lieferzeit']:.1f} Tage")
-        c4.metric("Reklamationsquote", f"{selected['Reklamationsquote']:.1f}%")
-        c5.metric("Preisabweichung", f"{selected['Preisabweichung']:.1f}%")
-        c6.metric("Anomalien", int(selected["Anomalien"]))
-
+    with c_mid:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">📍 {sel["Supplier"]}</div>', unsafe_allow_html=True)
+        ca, cb = st.columns(2)
+        with ca:
+            st.metric("ID",       sel["Supplier_ID"])
+            st.metric("Category", sel["Material"])
+        with cb:
+            st.metric("Country",  sel["Country"])
+            st.metric("Status",   sel["Status"])
+        st.write("")
+        cc, cd = st.columns(2)
+        ce, cf = st.columns(2)
+        with cc: st.metric("On-Time Delivery", f"{sel['Liefertreue']:.1f}%",      f"{sel['Liefertreue']-95:.1f}%")
+        with cd: st.metric("Quality Score",    f"{sel['Qualitätsrate']:.1f}%",    f"{sel['Qualitätsrate']-97:.1f}%")
+        with ce: st.metric("Lead Time",        f"{sel['Lieferzeit']:.1f} d",      f"{sel['Lieferzeit']-10:.1f} d")
+        with cf: st.metric("Complaint Rate",   f"{sel['Reklamationsquote']:.2f}%",f"{sel['Reklamationsquote']-1.0:.2f}%")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with right:
-        st.markdown('<div class="main-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Gesamtscore</div>', unsafe_allow_html=True)
-        st.plotly_chart(donut_chart(selected["Score"], score_color(selected["Score"])), use_container_width=True)
-
-        box_cls = box_status(selected["Score"])
-        st.markdown(f'<div class="{box_cls}">Risikostufe: {selected["Risikostufe"]}</div>', unsafe_allow_html=True)
-
-        st.markdown(f'<div class="info-line">Status: <span class="info-muted">{selected["Status"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Kritischer KPI: <span class="info-muted">{selected["Kritischer KPI"]}</span></div>', unsafe_allow_html=True)
+    with c_right:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">🎯 Overall Score</div>', unsafe_allow_html=True)
+        st.plotly_chart(donut_chart(sel["Score"], score_color(sel["Score"])), use_container_width=True, config={"displayModeBar": False})
+        risk_cls = "badge-success" if sel["Risk"] == "Low" else "badge-warning" if sel["Risk"] == "Medium" else "badge-danger"
+        st.markdown(f'<span class="badge {risk_cls}" style="font-size:0.9rem;">Risk: {sel["Risk"]}</span>', unsafe_allow_html=True)
+        st.write("")
+        st.markdown(f"**Critical KPI:** {sel['Crit_KPI']}")
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ── TAB 2: RANKINGS & INSIGHTS ───────────────────────────
 with tab2:
-    a, b = st.columns([1.25, 1.0])
+    c_rank, c_ins = st.columns([1.2, 0.95])
 
-    with a:
-        st.markdown('<div class="main-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Automatisches Ranking</div>', unsafe_allow_html=True)
-        rank_df = filtered[["Supplier", "Material", "Country", "Score", "Anomalien", "Kritischer KPI"]].sort_values("Score", ascending=False)
+    with c_rank:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">📊 Supplier Ranking</div>', unsafe_allow_html=True)
+        rank_df = filtered[["Supplier","Material","Country","Score","Anomalien","Risk"]].sort_values("Score", ascending=False).copy()
+        rank_df.insert(0, "Rank", range(1, len(rank_df)+1))
         st.dataframe(rank_df, use_container_width=True, hide_index=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with b:
-        st.markdown('<div class="main-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Management Insights</div>', unsafe_allow_html=True)
-
-        for i, (_, row) in enumerate(filtered.head(3).iterrows(), start=1):
+    with c_ins:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">💡 Key Insights</div>', unsafe_allow_html=True)
+        for i, (_, row) in enumerate(filtered.head(3).iterrows(), 1):
             st.markdown(f"""
-            <div class="status-box-good">
-                Top {i}: {row['Supplier']} · Score {row['Score']}<br>
-                Empfehlung: Lieferant überzeugt durch {row['Begründung']}.
-            </div>
-            """, unsafe_allow_html=True)
-
+            <div class="insight-box">
+                <b>Top {i}: {row['Supplier']}</b><br>
+                <span style="font-size:0.9rem;">Score: {row['Score']} | {row['Material']} | {row['Country']}</span><br>
+                <span style="font-size:0.85rem;opacity:0.9;">Strengths: {row['Strengths']}</span>
+            </div>""", unsafe_allow_html=True)
         for _, row in filtered.sort_values("Score").head(2).iterrows():
             st.markdown(f"""
-            <div class="status-box-mid">
-                Beobachten: {row['Supplier']} · Score {row['Score']}<br>
-                Fokus auf KPI: {row['Kritischer KPI']}.
-            </div>
-            """, unsafe_allow_html=True)
-
+            <div class="warning-box">
+                <b>⚠️ Attention: {row['Supplier']}</b><br>
+                <span style="font-size:0.9rem;">Critical: {row['Crit_KPI']} | Score: {row['Score']}</span><br>
+                <span style="font-size:0.85rem;opacity:0.9;">Action: Monitor performance closely.</span>
+            </div>""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ── TAB 3: ANALYTICS ─────────────────────────────────────
 with tab3:
-    v1, v2 = st.columns(2)
+    r1c1, r1c2 = st.columns(2)
 
-    with v1:
-        fig_rank = px.bar(
-            filtered.sort_values("Score", ascending=False),
-            x="Supplier",
-            y="Score",
-            color="Material",
-            color_discrete_sequence=px.colors.qualitative.Set2,
-            title="Lieferantenranking nach Score"
-        )
-        fig_rank.update_layout(plot_bgcolor="white", paper_bgcolor="white", legend_title_text="")
-        st.plotly_chart(fig_rank, use_container_width=True)
-
-        material_share = filtered["Material"].value_counts().reset_index()
-        material_share.columns = ["Material", "Anzahl"]
-        fig_pie = px.pie(
-            material_share,
-            names="Material",
-            values="Anzahl",
-            hole=0.55,
-            title="Materialverteilung",
-            color_discrete_sequence=px.colors.qualitative.Pastel
-        )
-        fig_pie.update_layout(paper_bgcolor="white")
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    with v2:
-        fig_scatter = px.scatter(
-            filtered,
-            x="Liefertreue",
-            y="Qualitätsrate",
-            size="Score",
-            color="Material",
-            hover_name="Supplier",
-            color_discrete_sequence=px.colors.qualitative.Bold,
-            title="Liefertreue vs. Qualitätsrate"
-        )
-        fig_scatter.update_layout(plot_bgcolor="white", paper_bgcolor="white", legend_title_text="")
-        st.plotly_chart(fig_scatter, use_container_width=True)
-
-        ano = filtered.copy()
-        ano["Anomaly Status"] = np.where(ano["Anomalien"] > 0, "Mit Anomalie", "Ohne Anomalie")
-        ano_count = ano["Anomaly Status"].value_counts().reset_index()
-        ano_count.columns = ["Status", "Anzahl"]
-
-        fig_donut = px.pie(
-            ano_count,
-            names="Status",
-            values="Anzahl",
-            hole=0.6,
-            title="Anomalieverteilung",
-            color_discrete_sequence=["#ef4444", "#22c55e"]
-        )
-        fig_donut.update_layout(paper_bgcolor="white")
-        st.plotly_chart(fig_donut, use_container_width=True)
-
-with tab4:
-    d1, d2 = st.columns([1.05, 1.15])
-
-    with d1:
-        st.markdown('<div class="main-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Lieferantenprofil</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Lieferant: <span class="info-muted">{selected["Supplier"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">ID: <span class="info-muted">{selected["Supplier_ID"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Kategorie: <span class="info-muted">{selected["Material"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Land: <span class="info-muted">{selected["Country"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Status: <span class="info-muted">{selected["Status"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Risikostufe: <span class="info-muted">{selected["Risikostufe"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Kritischer KPI: <span class="info-muted">{selected["Kritischer KPI"]}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-line">Begründung: <span class="info-muted">{selected["Begründung"]}</span></div>', unsafe_allow_html=True)
+    with r1c1:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        fig = px.bar(filtered.sort_values("Score", ascending=False), x="Supplier", y="Score",
+                     color="Score", title="Supplier Ranking by Score", color_continuous_scale="Viridis")
+        fig.update_traces(marker_line_width=0)
+        fig.update_layout(**plotly_dark_layout(title_font_size=14))
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if selected["Score"] >= 90:
-            st.markdown(f'<div class="status-box-good">Empfehlung: {selected["Supplier"]} kann als bevorzugter Lieferant genutzt werden. Stärken: {selected["Begründung"]}.</div>', unsafe_allow_html=True)
-        elif selected["Score"] >= 75:
-            st.markdown(f'<div class="status-box-mid">Empfehlung: Lieferant ist nutzbar, sollte aber bei {selected["Kritischer KPI"]} weiter beobachtet werden.</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="status-box-bad">Empfehlung: Lieferant kritisch. Eskalation oder Alternativlieferant prüfen.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        mat = filtered["Material"].value_counts().reset_index()
+        mat.columns = ["Material","Count"]
+        fig2 = px.pie(mat, names="Material", values="Count", hole=0.5,
+                      title="Material Distribution", color_discrete_sequence=px.colors.qualitative.Set2)
+        fig2.update_layout(**plotly_dark_layout(title_font_size=14))
+        st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    with d2:
-        fig_profile = go.Figure()
-        fig_profile.add_trace(go.Bar(
-            x=["Liefertreue", "Qualitätsrate", "Reklamationsquote", "Preisabweichung", "Lieferzeit"],
-            y=[
-                selected["Liefertreue"],
-                selected["Qualitätsrate"],
-                selected["Reklamationsquote"],
-                abs(selected["Preisabweichung"]),
-                selected["Lieferzeit"]
-            ],
-            marker_color=["#2563eb", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"]
+    with r1c2:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        fig3 = px.scatter(filtered, x="Liefertreue", y="Qualitätsrate", size="Score", color="Score",
+                          hover_name="Supplier", title="Delivery Reliability vs Quality",
+                          color_continuous_scale="Plasma")
+        fig3.update_layout(**plotly_dark_layout(title_font_size=14))
+        st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar": False})
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        ano_df = filtered.copy()
+        ano_df["AnomalyStatus"] = np.where(ano_df["Anomalien"] > 0, "Has Anomalies", "Clean")
+        ano_share = ano_df["AnomalyStatus"].value_counts().reset_index()
+        ano_share.columns = ["Status","Count"]
+        fig4 = px.pie(ano_share, names="Status", values="Count", hole=0.6,
+                      title="Anomaly Distribution", color_discrete_sequence=["#ef4444","#22c55e"])
+        fig4.update_layout(**plotly_dark_layout(title_font_size=14))
+        st.plotly_chart(fig4, use_container_width=True, config={"displayModeBar": False})
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    r2c1, r2c2 = st.columns(2)
+    with r2c1:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        fig5 = px.bar(filtered.sort_values("Lieferzeit"), x="Supplier", y="Lieferzeit",
+                      color="Lieferzeit", title="Lead Time Comparison", color_continuous_scale="Blues_r")
+        fig5.update_traces(marker_line_width=0)
+        fig5.update_layout(**plotly_dark_layout(title_font_size=14))
+        st.plotly_chart(fig5, use_container_width=True, config={"displayModeBar": False})
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with r2c2:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        fig6 = px.bar(filtered.sort_values("Reklamationsquote", ascending=False),
+                      x="Supplier", y="Reklamationsquote", color="Reklamationsquote",
+                      title="Complaint Rate Comparison", color_continuous_scale="Reds_r")
+        fig6.update_traces(marker_line_width=0)
+        fig6.update_layout(**plotly_dark_layout(title_font_size=14))
+        st.plotly_chart(fig6, use_container_width=True, config={"displayModeBar": False})
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ── TAB 4: SUPPLIER PROFILE ──────────────────────────────
+with tab4:
+    cp1, cp2 = st.columns([1.1, 1.1])
+
+    with cp1:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">👤 Supplier Profile</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+**Supplier ID:** {sel['Supplier_ID']}  
+**Supplier Name:** {sel['Supplier']}  
+**Category:** {sel['Material']}  
+**Country:** {sel['Country']}  
+**Status:** {sel['Status']}  
+**Risk Level:** {sel['Risk']}  
+**Critical KPI:** {sel['Crit_KPI']}  
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if sel["Score"] >= 90:
+            st.markdown(f'<div class="insight-box"><b>✅ Recommendation</b><br>{sel["Supplier"]} is a preferred supplier. Strengths: {sel["Strengths"]}</div>', unsafe_allow_html=True)
+        elif sel["Score"] >= 75:
+            st.markdown(f'<div class="warning-box"><b>⚠️ Recommendation</b><br>Monitor <b>{sel["Crit_KPI"]}</b> closely. Supplier is usable but requires oversight.</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="critical-box"><b>🔴 Critical</b><br>Focus on <b>{sel["Crit_KPI"]}</b>. Consider alternative suppliers.</div>', unsafe_allow_html=True)
+
+    with cp2:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">📊 KPI Profile</div>', unsafe_allow_html=True)
+        fig_p = go.Figure(go.Bar(
+            x=["Delivery","Quality","Complaints","Price Var.","Lead Time"],
+            y=[sel["Liefertreue"], sel["Qualitätsrate"], sel["Reklamationsquote"],
+               abs(sel["Preisabweichung"]), sel["Lieferzeit"]],
+            marker=dict(color=["#22c55e","#3b82f6","#f59e0b","#ef4444","#8b5cf6"], line=dict(width=0)),
+            hovertemplate="<b>%{x}</b><br>Value: %{y:.1f}<extra></extra>",
         ))
-        fig_profile.update_layout(
-            title="KPI-Profil des Lieferanten",
-            plot_bgcolor="white",
-            paper_bgcolor="white"
-        )
-        st.plotly_chart(fig_profile, use_container_width=True)
+        fig_p.update_layout(title="KPI Performance Profile", showlegend=False,
+                            **plotly_dark_layout(title_font_size=14))
+        st.plotly_chart(fig_p, use_container_width=True, config={"displayModeBar": False})
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ── TAB 5: DETAILS ───────────────────────────────────────
+with tab5:
+    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📋 Complete Data View</div>', unsafe_allow_html=True)
+    detail_cols = ["Supplier","Supplier_ID","Material","Country","Liefertreue","Lieferzeit",
+                   "Qualitätsrate","Reklamationsquote","Preisabweichung","Score","Anomalien","Status","Risk"]
+    st.dataframe(agg[[c for c in detail_cols if c in agg.columns]].round(2), use_container_width=True, hide_index=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =========================================================
+# FOOTER
+# =========================================================
+st.markdown("---")
+st.markdown("""
+<div style='text-align:center;color:#6b7280;font-size:0.85rem;margin-top:2rem;'>
+    Supplier Evaluation Dashboard · Enterprise Edition<br>
+    Built with Streamlit | Powered by Advanced Analytics
+</div>""", unsafe_allow_html=True)
