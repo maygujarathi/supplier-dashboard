@@ -1,24 +1,79 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="Lieferantenbewertung", page_icon="📊", layout="wide")
+st.set_page_config(
+    page_title="Lieferantenbewertung",
+    page_icon="📊",
+    layout="wide",
+)
 
+# --------------------------------------------------
+# Styling
+# --------------------------------------------------
+st.markdown("""
+<style>
+    .main {
+        background-color: #f6f8fc;
+    }
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 1rem;
+    }
+    .metric-card {
+        background: white;
+        padding: 16px 18px;
+        border-radius: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        border-left: 6px solid #3b82f6;
+    }
+    .section-card {
+        background: white;
+        padding: 18px;
+        border-radius: 18px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        margin-bottom: 14px;
+    }
+    .insight-good {
+        background: #ecfdf5;
+        color: #065f46;
+        padding: 10px 14px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+    }
+    .insight-warn {
+        background: #fff7ed;
+        color: #9a3412;
+        padding: 10px 14px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+    }
+    .small-muted {
+        color: #6b7280;
+        font-size: 0.92rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # --------------------------------------------------
 # Helpers
 # --------------------------------------------------
 def clean_columns(df: pd.DataFrame) -> pd.DataFrame:
-    df.columns = [str(col).strip() for col in df.columns]
+    df.columns = [str(c).strip() for c in df.columns]
     return df
 
-
-def to_numeric_safe(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
-    for col in cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+def to_numeric_safe(df: pd.DataFrame, cols):
+    for c in cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
 
+def normalize_anomaly_flag(value):
+    if pd.isna(value):
+        return 0
+    v = str(value).strip().lower()
+    return 1 if v in {"yes", "ja", "y", "true", "1", "kritisch"} else 0
 
 def get_risk_level(score):
     if pd.isna(score):
@@ -29,63 +84,44 @@ def get_risk_level(score):
         return "Mittel"
     return "Hoch"
 
-
-def get_default_status(score):
+def get_status_default(score):
     if pd.isna(score):
         return "Unbekannt"
     if score >= 90:
-        return "Gut"
+        return "Sehr gut"
     elif score >= 75:
         return "Beobachten"
     return "Kritisch"
 
-
-def normalize_anomaly_flag(value):
-    if pd.isna(value):
-        return 0
-    value = str(value).strip().lower()
-    yes_values = {"yes", "y", "true", "1", "ja", "kritisch"}
-    return 1 if value in yes_values else 0
-
-
-def calculate_anomalies_from_kpis(row):
+def calculate_anomalies(row):
     count = 0
-    if "Liefertreue" in row and pd.notna(row["Liefertreue"]) and row["Liefertreue"] < 95:
+    if pd.notna(row.get("Liefertreue")) and row["Liefertreue"] < 95:
         count += 1
-    if "Lieferzeit" in row and pd.notna(row["Lieferzeit"]) and row["Lieferzeit"] > 10:
+    if pd.notna(row.get("Lieferzeit")) and row["Lieferzeit"] > 10:
         count += 1
-    if "Qualitätsrate" in row and pd.notna(row["Qualitätsrate"]) and row["Qualitätsrate"] < 97:
+    if pd.notna(row.get("Qualitätsrate")) and row["Qualitätsrate"] < 97:
         count += 1
-    if "Reklamationsquote" in row and pd.notna(row["Reklamationsquote"]) and row["Reklamationsquote"] > 1.0:
+    if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0:
         count += 1
-    if "Preisabweichung" in row and pd.notna(row["Preisabweichung"]) and abs(row["Preisabweichung"]) > 1.0:
+    if pd.notna(row.get("Preisabweichung")) and abs(row["Preisabweichung"]) > 1.0:
         count += 1
     return count
 
-
-def calculate_score_from_kpis(row):
+def calculate_score(row):
     score = 100.0
-
     if pd.notna(row.get("Liefertreue")) and row["Liefertreue"] < 95:
-        score -= (95 - row["Liefertreue"]) * 2
-
+        score -= (95 - row["Liefertreue"]) * 1.8
     if pd.notna(row.get("Lieferzeit")) and row["Lieferzeit"] > 10:
-        score -= (row["Lieferzeit"] - 10) * 2
-
+        score -= (row["Lieferzeit"] - 10) * 2.0
     if pd.notna(row.get("Qualitätsrate")) and row["Qualitätsrate"] < 97:
-        score -= (97 - row["Qualitätsrate"]) * 3
-
+        score -= (97 - row["Qualitätsrate"]) * 2.5
     if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0:
-        score -= (row["Reklamationsquote"] - 1.0) * 10
-
+        score -= (row["Reklamationsquote"] - 1.0) * 8
     if pd.notna(row.get("Preisabweichung")) and abs(row["Preisabweichung"]) > 1.0:
-        score -= (abs(row["Preisabweichung"]) - 1.0) * 5
-
+        score -= (abs(row["Preisabweichung"]) - 1.0) * 3.5
     if pd.notna(row.get("Anomalien")):
         score -= row["Anomalien"] * 0.5
-
     return max(round(score, 1), 0)
-
 
 def get_critical_kpi(row):
     problems = {
@@ -95,20 +131,47 @@ def get_critical_kpi(row):
         "Reklamationsquote": row["Reklamationsquote"] - 1.0 if pd.notna(row.get("Reklamationsquote")) and row["Reklamationsquote"] > 1.0 else 0,
         "Preisabweichung": abs(row["Preisabweichung"]) - 1.0 if pd.notna(row.get("Preisabweichung")) and abs(row["Preisabweichung"]) > 1.0 else 0,
     }
-    max_kpi = max(problems, key=problems.get)
-    return max_kpi if problems[max_kpi] > 0 else "Kein kritischer KPI"
+    best = max(problems, key=problems.get)
+    return best if problems[best] > 0 else "Kein kritischer KPI"
 
+def get_reason_text(row):
+    reasons = []
+    if row["Liefertreue"] >= 95:
+        reasons.append("hohe Liefertreue")
+    if row["Qualitätsrate"] >= 97:
+        reasons.append("starke Qualitätsleistung")
+    if row["Lieferzeit"] <= 10:
+        reasons.append("gute Lieferzeit")
+    if row["Reklamationsquote"] <= 1.0:
+        reasons.append("niedrige Reklamationsquote")
+    if abs(row["Preisabweichung"]) <= 1.0:
+        reasons.append("stabile Preisabweichung")
+    if not reasons:
+        return "gemischtes Leistungsprofil"
+    return ", ".join(reasons[:3])
 
-def make_mapping_options(columns):
-    return ["-- Nicht vorhanden --"] + list(columns)
-
+def make_donut(label, value, color="#3b82f6"):
+    fig = go.Figure(go.Pie(
+        values=[value, max(0, 100 - value)],
+        labels=[label, ""],
+        hole=0.72,
+        marker_colors=[color, "#e5e7eb"],
+        textinfo="none",
+        sort=False
+    ))
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(t=0, b=0, l=0, r=0),
+        paper_bgcolor="white",
+        annotations=[dict(text=f"<b>{value:.1f}</b>", x=0.5, y=0.5, font_size=26, showarrow=False)]
+    )
+    return fig
 
 # --------------------------------------------------
-# Title
+# Header
 # --------------------------------------------------
 st.title("Lieferantenbewertung")
-st.caption("KPI-Monitoring · Anomalieerkennung · Flexible Excel-Spaltenzuordnung")
-
+st.caption("KPI-Monitoring · Anomalieerkennung · Interaktive Dashboard-App")
 
 # --------------------------------------------------
 # Upload
@@ -126,47 +189,39 @@ except Exception as e:
     st.stop()
 
 raw_df = clean_columns(raw_df)
-
-if raw_df.empty:
-    st.error("Die hochgeladene Datei enthält keine Daten.")
-    st.stop()
-
-st.subheader("1. Erkannte Spalten")
-st.dataframe(pd.DataFrame({"Spaltenname": raw_df.columns}), use_container_width=True, hide_index=True)
-
+all_cols = ["-- Nicht vorhanden --"] + list(raw_df.columns)
 
 # --------------------------------------------------
-# Column mapping
+# Mapping UI - cleaner
 # --------------------------------------------------
-st.subheader("2. Spaltenzuordnung")
+with st.expander("Spaltenzuordnung", expanded=True):
+    c1, c2, c3 = st.columns(3)
 
-all_columns = make_mapping_options(raw_df.columns)
+    with c1:
+        supplier_col = st.selectbox("Supplier", all_cols, index=all_cols.index("Supplier_Name") if "Supplier_Name" in all_cols else 0)
+        country_col = st.selectbox("Country", all_cols, index=all_cols.index("Country") if "Country" in all_cols else 0)
+        material_col = st.selectbox("Material / Category", all_cols, index=all_cols.index("Category") if "Category" in all_cols else 0)
+        supplier_id_col = st.selectbox("Supplier ID (optional)", all_cols, index=all_cols.index("Supplier_ID") if "Supplier_ID" in all_cols else 0)
 
-left_map, right_map = st.columns(2)
+    with c2:
+        delivery_col = st.selectbox("Liefertreue", all_cols, index=all_cols.index("Delivery_Performance_%") if "Delivery_Performance_%" in all_cols else 0)
+        leadtime_col = st.selectbox("Lieferzeit", all_cols, index=all_cols.index("Lead_Time_Days") if "Lead_Time_Days" in all_cols else 0)
+        quality_col = st.selectbox("Qualitätsrate", all_cols, index=all_cols.index("Quality_Score_%") if "Quality_Score_%" in all_cols else 0)
+        complaint_col = st.selectbox("Reklamationsquote", all_cols, index=all_cols.index("Complaint_Rate_%") if "Complaint_Rate_%" in all_cols else 0)
 
-with left_map:
-    supplier_col = st.selectbox("Supplier / Lieferantenname *", all_columns, index=1 if len(all_columns) > 1 else 0)
-    country_col = st.selectbox("Country / Land *", all_columns)
-    material_col = st.selectbox("Material / Category *", all_columns)
-    delivery_col = st.selectbox("Liefertreue / Delivery Performance *", all_columns)
-    leadtime_col = st.selectbox("Lieferzeit / Lead Time *", all_columns)
-    quality_col = st.selectbox("Qualitätsrate / Quality Score *", all_columns)
+    with c3:
+        price_col = st.selectbox("Preisabweichung", all_cols, index=all_cols.index("Price_Deviation_%") if "Price_Deviation_%" in all_cols else 0)
+        score_col = st.selectbox("Score (optional)", all_cols, index=all_cols.index("Overall_Score") if "Overall_Score" in all_cols else 0)
+        status_col = st.selectbox("Status (optional)", all_cols, index=all_cols.index("Status") if "Status" in all_cols else 0)
+        anomaly_col = st.selectbox("Anomaly Flag (optional)", all_cols, index=all_cols.index("Anomaly_Flag") if "Anomaly_Flag" in all_cols else 0)
+        month_col = st.selectbox("Month (optional)", all_cols)
 
-with right_map:
-    complaint_col = st.selectbox("Reklamationsquote / Complaint Rate *", all_columns)
-    price_col = st.selectbox("Preisabweichung / Price Deviation *", all_columns)
-    score_col = st.selectbox("Overall Score (optional)", all_columns)
-    status_col = st.selectbox("Status (optional)", all_columns)
-    anomaly_col = st.selectbox("Anomaly Flag (optional)", all_columns)
-    supplier_id_col = st.selectbox("Supplier ID (optional)", all_columns)
-    month_col = st.selectbox("Month (optional, for trend charts)", all_columns)
+    run_dashboard = st.button("Dashboard laden", type="primary")
 
-generate = st.button("Dashboard generieren", type="primary")
-
-if not generate:
+if not run_dashboard:
     st.stop()
 
-required_selected = {
+required = {
     "Supplier": supplier_col,
     "Country": country_col,
     "Material": material_col,
@@ -177,14 +232,9 @@ required_selected = {
     "Preisabweichung": price_col,
 }
 
-missing_required = [k for k, v in required_selected.items() if v == "-- Nicht vorhanden --"]
-if missing_required:
-    st.error(f"Bitte ordne alle Pflichtfelder zu: {', '.join(missing_required)}")
-    st.stop()
-
-selected_real_cols = list(required_selected.values())
-if len(selected_real_cols) != len(set(selected_real_cols)):
-    st.error("Mindestens eine Pflichtspalte wurde mehrfach zugeordnet. Bitte jede Pflichtrolle nur einer Spalte zuordnen.")
+missing = [k for k, v in required.items() if v == "-- Nicht vorhanden --"]
+if missing:
+    st.error(f"Bitte ordne alle Pflichtspalten zu: {', '.join(missing)}")
     st.stop()
 
 mapping = {
@@ -198,267 +248,265 @@ mapping = {
     price_col: "Preisabweichung",
 }
 
-optional_map = {
+optional = {
+    supplier_id_col: "Supplier_ID",
     score_col: "Score",
     status_col: "Status",
     anomaly_col: "Anomaly_Flag",
-    supplier_id_col: "Supplier_ID",
     month_col: "Month",
 }
 
-for src, target in optional_map.items():
+for src, tgt in optional.items():
     if src != "-- Nicht vorhanden --":
-        mapping[src] = target
+        mapping[src] = tgt
 
 df = raw_df.rename(columns=mapping).copy()
 
-# Add optional fallback columns if missing
 if "Supplier_ID" not in df.columns:
     df["Supplier_ID"] = [f"S{i+1:02d}" for i in range(len(df))]
 
-# Convert numeric fields
-numeric_cols = ["Liefertreue", "Lieferzeit", "Qualitätsrate", "Reklamationsquote", "Preisabweichung"]
-if "Score" in df.columns:
-    numeric_cols.append("Score")
-
-df = to_numeric_safe(df, numeric_cols)
-
-# Keep only rows with essential data
+df = to_numeric_safe(df, ["Liefertreue", "Lieferzeit", "Qualitätsrate", "Reklamationsquote", "Preisabweichung", "Score"])
 df = df.dropna(subset=["Supplier", "Country", "Material", "Liefertreue", "Lieferzeit", "Qualitätsrate", "Reklamationsquote", "Preisabweichung"])
 
-if df.empty:
-    st.error("Nach der Bereinigung sind keine gültigen Datenzeilen mehr vorhanden.")
-    st.stop()
-
-# Anomalies
 if "Anomaly_Flag" in df.columns:
     df["Anomalien"] = df["Anomaly_Flag"].apply(normalize_anomaly_flag)
 else:
-    df["Anomalien"] = df.apply(calculate_anomalies_from_kpis, axis=1)
+    df["Anomalien"] = df.apply(calculate_anomalies, axis=1)
 
-# Score
 if "Score" not in df.columns:
-    df["Score"] = df.apply(calculate_score_from_kpis, axis=1)
+    df["Score"] = df.apply(calculate_score, axis=1)
 
-# Status
 if "Status" not in df.columns:
-    df["Status"] = df["Score"].apply(get_default_status)
+    df["Status"] = df["Score"].apply(get_status_default)
 
-# Risk + critical KPI
 df["Risikostufe"] = df["Score"].apply(get_risk_level)
 df["Kritischer KPI"] = df.apply(get_critical_kpi, axis=1)
+df["Warum gut?"] = df.apply(get_reason_text, axis=1)
 
-# Month ordering if available
-if "Month" in df.columns:
-    month_order = ["Jan", "Feb", "Mar", "Apr", "Mai", "May", "Jun", "Jul", "Aug", "Sep", "Okt", "Oct", "Nov", "Dez", "Dec"]
-    if df["Month"].astype(str).isin(month_order).all():
-        df["Month"] = pd.Categorical(df["Month"], categories=month_order, ordered=True)
-        df = df.sort_values(["Supplier", "Month"])
-
-st.success("Spalten erfolgreich zugeordnet.")
-
-
-# --------------------------------------------------
-# Filters
-# --------------------------------------------------
-st.subheader("3. Dashboard")
-
-st.sidebar.header("Filter")
-
-material_options = ["Alle"] + sorted(df["Material"].astype(str).dropna().unique().tolist())
-selected_material = st.sidebar.selectbox("Material", material_options)
-
-filtered_df = df.copy()
-if selected_material != "Alle":
-    filtered_df = filtered_df[filtered_df["Material"] == selected_material]
-
-supplier_options = filtered_df["Supplier"].astype(str).dropna().unique().tolist()
-selected_supplier = st.sidebar.selectbox("Lieferant auswählen", supplier_options)
-
-selected_df = filtered_df[filtered_df["Supplier"] == selected_supplier].copy()
-
-if selected_df.empty:
-    st.warning("Kein Lieferant nach aktuellem Filter gefunden.")
-    st.stop()
-
-# For card values, aggregate supplier if multiple rows exist
-selected_row = selected_df.iloc[0].copy()
-if len(selected_df) > 1:
-    selected_row["Liefertreue"] = selected_df["Liefertreue"].mean()
-    selected_row["Lieferzeit"] = selected_df["Lieferzeit"].mean()
-    selected_row["Qualitätsrate"] = selected_df["Qualitätsrate"].mean()
-    selected_row["Reklamationsquote"] = selected_df["Reklamationsquote"].mean()
-    selected_row["Preisabweichung"] = selected_df["Preisabweichung"].mean()
-    selected_row["Score"] = selected_df["Score"].mean()
-    selected_row["Anomalien"] = selected_df["Anomalien"].sum()
-    selected_row["Risikostufe"] = get_risk_level(selected_row["Score"])
-    selected_row["Status"] = get_default_status(selected_row["Score"])
-    selected_row["Kritischer KPI"] = get_critical_kpi(selected_row)
-
-# Top summary across filtered set
-agg_view = filtered_df.groupby("Supplier", as_index=False).agg({
+agg = df.groupby("Supplier", as_index=False).agg({
+    "Supplier_ID": "first",
     "Material": "first",
     "Country": "first",
-    "Score": "mean",
-    "Anomalien": "sum",
     "Liefertreue": "mean",
     "Lieferzeit": "mean",
     "Qualitätsrate": "mean",
     "Reklamationsquote": "mean",
     "Preisabweichung": "mean",
+    "Score": "mean",
+    "Anomalien": "sum",
+    "Status": "first",
+    "Risikostufe": "first",
+    "Kritischer KPI": "first",
+    "Warum gut?": "first",
 })
-agg_view["Risikostufe"] = agg_view["Score"].apply(get_risk_level)
-agg_view["Status"] = agg_view["Score"].apply(get_default_status)
 
-# Top cards
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Lieferanten", int(agg_view["Supplier"].nunique()))
-c2.metric("Ø Score", f"{agg_view['Score'].mean():.1f}")
-c3.metric("Gesamt-Anomalien", int(agg_view["Anomalien"].sum()))
-c4.metric("Ø Liefertreue", f"{agg_view['Liefertreue'].mean():.1f}%")
+agg["Score"] = agg["Score"].round(1)
+agg = agg.sort_values("Score", ascending=False).reset_index(drop=True)
 
-st.divider()
+# --------------------------------------------------
+# Sidebar filters
+# --------------------------------------------------
+st.sidebar.header("Filter")
 
-# Main layout
-left, center, right = st.columns([1.15, 2.2, 1.0])
+materials = ["Alle"] + sorted(agg["Material"].dropna().astype(str).unique().tolist())
+selected_material = st.sidebar.selectbox("Material filtern", materials)
 
-with left:
-    st.subheader("Lieferantenliste")
-    supplier_table = agg_view[["Supplier", "Material", "Country", "Score", "Status", "Anomalien"]].copy()
-    supplier_table["Score"] = supplier_table["Score"].round(1)
-    st.dataframe(supplier_table.sort_values("Score", ascending=False), use_container_width=True, hide_index=True)
+filtered = agg.copy()
+if selected_material != "Alle":
+    filtered = filtered[filtered["Material"] == selected_material]
 
-with center:
-    st.subheader(str(selected_row["Supplier"]))
-    st.write(
-        f"**Lieferanten-ID:** {selected_row.get('Supplier_ID', '-')}" + "  |  "
-        f"**Kategorie:** {selected_row['Material']}" + "  |  "
-        f"**Land:** {selected_row['Country']}"
-    )
+top_n = st.sidebar.slider("Top Lieferanten anzeigen", 3, min(10, max(3, len(filtered))), min(5, max(3, len(filtered))))
+selected_supplier = st.sidebar.selectbox("Lieferant auswählen", filtered["Supplier"].tolist())
 
-    k1, k2, k3 = st.columns(3)
-    k4, k5, k6 = st.columns(3)
+selected = filtered[filtered["Supplier"] == selected_supplier].iloc[0]
 
-    k1.metric("Liefertreue", f"{selected_row['Liefertreue']:.1f}%")
-    k2.metric("Lieferzeit", f"{selected_row['Lieferzeit']:.1f} Tage")
-    k3.metric("Qualitätsrate", f"{selected_row['Qualitätsrate']:.1f}%")
-    k4.metric("Reklamationsquote", f"{selected_row['Reklamationsquote']:.1f}%")
-    k5.metric("Preisabweichung", f"{selected_row['Preisabweichung']:.1f}%")
-    k6.metric("Anomalien", int(selected_row["Anomalien"]))
+# --------------------------------------------------
+# KPI cards row
+# --------------------------------------------------
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.markdown(f'<div class="metric-card"><div class="small-muted">Lieferanten</div><h2>{filtered["Supplier"].nunique()}</h2></div>', unsafe_allow_html=True)
+c2.markdown(f'<div class="metric-card"><div class="small-muted">Ø Score</div><h2>{filtered["Score"].mean():.1f}</h2></div>', unsafe_allow_html=True)
+c3.markdown(f'<div class="metric-card"><div class="small-muted">Anomalien</div><h2>{int(filtered["Anomalien"].sum())}</h2></div>', unsafe_allow_html=True)
+c4.markdown(f'<div class="metric-card"><div class="small-muted">Top Material</div><h2>{filtered["Material"].mode().iloc[0] if not filtered.empty else "-"}</h2></div>', unsafe_allow_html=True)
+c5.markdown(f'<div class="metric-card"><div class="small-muted">Bester Lieferant</div><h2>{filtered.iloc[0]["Supplier"] if not filtered.empty else "-"}</h2></div>', unsafe_allow_html=True)
 
-with right:
-    st.subheader("Bewertung")
-    st.metric("Gesamtscore", f"{selected_row['Score']:.1f}/100")
-    st.write(f"**Risikostufe:** {selected_row['Risikostufe']}")
-    st.write(f"**Status:** {selected_row['Status']}")
-    st.write(f"**Kritischer KPI:** {selected_row['Kritischer KPI']}")
+st.write("")
 
-st.divider()
+# --------------------------------------------------
+# Tabs
+# --------------------------------------------------
+tab1, tab2, tab3, tab4 = st.tabs(["Übersicht", "Top 3", "Visualisierungen", "Lieferantendetails"])
 
-# Charts
-if "Month" in selected_df.columns and selected_df["Month"].nunique() > 1:
-    st.subheader("KPI-Trendanalyse")
+with tab1:
+    a, b, c = st.columns([1.2, 1.4, 1.1])
 
-    col_a, col_b = st.columns(2)
+    with a:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Ranking")
+        ranking_table = filtered[["Supplier", "Material", "Country", "Score", "Anomalien"]].sort_values("Score", ascending=False).head(top_n)
+        st.dataframe(ranking_table, use_container_width=True, hide_index=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    with col_a:
-        fig1 = px.line(selected_df, x="Month", y="Liefertreue", markers=True, title="Liefertreue (%)")
-        fig1.add_hline(y=95, line_dash="dash")
-        st.plotly_chart(fig1, use_container_width=True)
+    with b:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader(f"Ausgewählter Lieferant: {selected['Supplier']}")
+        st.write(f"**Lieferanten-ID:** {selected['Supplier_ID']}")
+        st.write(f"**Material:** {selected['Material']}")
+        st.write(f"**Land:** {selected['Country']}")
+        st.write(f"**Risikostufe:** {selected['Risikostufe']}")
+        st.write(f"**Status:** {selected['Status']}")
+        st.write(f"**Kritischer KPI:** {selected['Kritischer KPI']}")
+        st.write(f"**Stärken:** {selected['Warum gut?']}")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        fig2 = px.line(selected_df, x="Month", y="Qualitätsrate", markers=True, title="Qualitätsrate (%)")
-        fig2.add_hline(y=97, line_dash="dash")
-        st.plotly_chart(fig2, use_container_width=True)
+    with c:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Gesamtscore")
+        st.plotly_chart(make_donut("Score", selected["Score"], "#2563eb"), use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        fig3 = px.line(selected_df, x="Month", y="Preisabweichung", markers=True, title="Preisabweichung (%)")
-        fig3.add_hline(y=1.0, line_dash="dash")
-        fig3.add_hline(y=-1.0, line_dash="dash")
-        st.plotly_chart(fig3, use_container_width=True)
+    r1, r2, r3, r4, r5 = st.columns(5)
+    r1.metric("Liefertreue", f"{selected['Liefertreue']:.1f}%")
+    r2.metric("Lieferzeit", f"{selected['Lieferzeit']:.1f} Tage")
+    r3.metric("Qualitätsrate", f"{selected['Qualitätsrate']:.1f}%")
+    r4.metric("Reklamationsquote", f"{selected['Reklamationsquote']:.1f}%")
+    r5.metric("Preisabweichung", f"{selected['Preisabweichung']:.1f}%")
 
-    with col_b:
-        fig4 = px.line(selected_df, x="Month", y="Lieferzeit", markers=True, title="Lieferzeit (Tage)")
-        fig4.add_hline(y=10, line_dash="dash")
-        st.plotly_chart(fig4, use_container_width=True)
+with tab2:
+    top3 = filtered.sort_values("Score", ascending=False).head(3).copy()
 
-        fig5 = px.line(selected_df, x="Month", y="Reklamationsquote", markers=True, title="Reklamationsquote (%)")
-        fig5.add_hline(y=1.0, line_dash="dash")
-        st.plotly_chart(fig5, use_container_width=True)
+    st.subheader("Top 3 empfohlene Lieferanten")
+    for i, (_, row) in enumerate(top3.iterrows(), start=1):
+        color = "#16a34a" if i == 1 else "#2563eb" if i == 2 else "#f59e0b"
+        st.markdown(f"""
+        <div class="section-card">
+            <h3 style="margin-bottom:6px;color:{color};">#{i} {row['Supplier']}</h3>
+            <div><b>Material:</b> {row['Material']} &nbsp; | &nbsp; <b>Land:</b> {row['Country']} &nbsp; | &nbsp; <b>Score:</b> {row['Score']}</div>
+            <div style="margin-top:8px;"><b>Warum empfohlen?</b> {row['Warum gut?']}</div>
+            <div style="margin-top:6px;"><b>Kritischer KPI:</b> {row['Kritischer KPI']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        if "Anomalien" in selected_df.columns:
-            fig6 = px.bar(selected_df, x="Month", y="Anomalien", title="Anomalien pro Monat")
-            st.plotly_chart(fig6, use_container_width=True)
-else:
-    st.subheader("KPI-Vergleich aller Lieferanten")
+with tab3:
+    v1, v2 = st.columns(2)
 
-    col1, col2 = st.columns(2)
+    with v1:
+        fig_score = px.bar(
+            filtered.sort_values("Score", ascending=False).head(top_n),
+            x="Supplier",
+            y="Score",
+            color="Score",
+            color_continuous_scale="Blues",
+            title="Lieferantenranking nach Score"
+        )
+        fig_score.update_layout(plot_bgcolor="white", paper_bgcolor="white")
+        st.plotly_chart(fig_score, use_container_width=True)
 
-    with col1:
-        fig1 = px.bar(agg_view, x="Supplier", y="Liefertreue", color="Liefertreue", title="Liefertreue (%)")
-        st.plotly_chart(fig1, use_container_width=True)
+        pie_data = filtered["Material"].value_counts().reset_index()
+        pie_data.columns = ["Material", "Anzahl"]
+        fig_pie = px.pie(
+            pie_data,
+            names="Material",
+            values="Anzahl",
+            hole=0.45,
+            title="Verteilung nach Material",
+            color_discrete_sequence=px.colors.qualitative.Set2
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-        fig2 = px.bar(agg_view, x="Supplier", y="Qualitätsrate", color="Qualitätsrate", title="Qualitätsrate (%)")
-        st.plotly_chart(fig2, use_container_width=True)
+    with v2:
+        fig_scatter = px.scatter(
+            filtered,
+            x="Liefertreue",
+            y="Qualitätsrate",
+            size="Score",
+            color="Material",
+            hover_name="Supplier",
+            title="Liefertreue vs. Qualitätsrate",
+            color_discrete_sequence=px.colors.qualitative.Bold
+        )
+        fig_scatter.update_layout(plot_bgcolor="white", paper_bgcolor="white")
+        st.plotly_chart(fig_scatter, use_container_width=True)
 
-        fig3 = px.bar(agg_view, x="Supplier", y="Score", color="Score", title="Gesamtscore")
-        st.plotly_chart(fig3, use_container_width=True)
+        anomaly_counts = filtered.copy()
+        anomaly_counts["Anomaly Status"] = anomaly_counts["Anomalien"].apply(lambda x: "Mit Anomalie" if x > 0 else "Ohne Anomalie")
+        fig_donut = px.pie(
+            anomaly_counts["Anomaly Status"].value_counts().reset_index(),
+            names="Anomaly Status",
+            values="count",
+            hole=0.55,
+            title="Anomalie-Verteilung",
+            color_discrete_sequence=["#ef4444", "#22c55e"]
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
 
-    with col2:
-        fig4 = px.bar(agg_view, x="Supplier", y="Lieferzeit", color="Lieferzeit", title="Lieferzeit (Tage)")
-        st.plotly_chart(fig4, use_container_width=True)
+    h1, h2 = st.columns(2)
+    with h1:
+        fig_lt = px.bar(
+            filtered.sort_values("Lieferzeit", ascending=True).head(top_n),
+            x="Supplier",
+            y="Lieferzeit",
+            color="Lieferzeit",
+            color_continuous_scale="Tealgrn",
+            title="Lieferzeitvergleich"
+        )
+        st.plotly_chart(fig_lt, use_container_width=True)
 
-        fig5 = px.bar(agg_view, x="Supplier", y="Reklamationsquote", color="Reklamationsquote", title="Reklamationsquote (%)")
-        st.plotly_chart(fig5, use_container_width=True)
+    with h2:
+        fig_comp = px.bar(
+            filtered.sort_values("Reklamationsquote", ascending=False).head(top_n),
+            x="Supplier",
+            y="Reklamationsquote",
+            color="Reklamationsquote",
+            color_continuous_scale="OrRd",
+            title="Reklamationsquotevergleich"
+        )
+        st.plotly_chart(fig_comp, use_container_width=True)
 
-        fig6 = px.bar(agg_view, x="Supplier", y="Preisabweichung", color="Preisabweichung", title="Preisabweichung (%)")
-        st.plotly_chart(fig6, use_container_width=True)
+with tab4:
+    left, right = st.columns([1.5, 1.2])
 
-st.divider()
+    with left:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader(selected["Supplier"])
+        st.write(f"**ID:** {selected['Supplier_ID']}")
+        st.write(f"**Material:** {selected['Material']}")
+        st.write(f"**Country:** {selected['Country']}")
+        st.write(f"**Status:** {selected['Status']}")
+        st.write(f"**Risikostufe:** {selected['Risikostufe']}")
+        st.write(f"**Warum ist der Lieferant so bewertet?**")
+        if selected["Score"] >= 90:
+            st.markdown(f'<div class="insight-good">Dieser Lieferant gehört zu den besten, weil er {selected["Warum gut?"]} zeigt.</div>', unsafe_allow_html=True)
+        elif selected["Score"] >= 75:
+            st.markdown(f'<div class="insight-warn">Dieser Lieferant ist akzeptabel, aber der KPI "{selected["Kritischer KPI"]}" sollte beobachtet werden.</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="insight-warn">Dieser Lieferant ist kritisch. Hauptproblem ist "{selected["Kritischer KPI"]}".</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-# Anomaly overview
-st.subheader("Anomalien-Übersicht")
+    with right:
+        fig_supplier = go.Figure()
+        fig_supplier.add_trace(go.Bar(
+            x=["Liefertreue", "Qualitätsrate", "Reklamationsquote", "Preisabweichung", "Lieferzeit"],
+            y=[
+                selected["Liefertreue"],
+                selected["Qualitätsrate"],
+                selected["Reklamationsquote"],
+                abs(selected["Preisabweichung"]),
+                selected["Lieferzeit"]
+            ],
+            marker_color=["#2563eb", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"]
+        ))
+        fig_supplier.update_layout(
+            title="KPI-Profil des Lieferanten",
+            plot_bgcolor="white",
+            paper_bgcolor="white"
+        )
+        st.plotly_chart(fig_supplier, use_container_width=True)
 
-anomaly_df = agg_view[agg_view["Anomalien"] > 0].copy()
-
-if anomaly_df.empty:
-    st.success("Keine Anomalien in den aktuellen Daten gefunden.")
-else:
-    st.dataframe(
-        anomaly_df[[
-            "Supplier",
-            "Material",
-            "Country",
-            "Liefertreue",
-            "Lieferzeit",
-            "Qualitätsrate",
-            "Reklamationsquote",
-            "Preisabweichung",
-            "Score",
-            "Status",
-            "Anomalien",
-        ]].sort_values("Anomalien", ascending=False),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-st.divider()
-
-with st.expander("Vorschau der intern verwendeten Spaltenzuordnung"):
-    mapping_preview = pd.DataFrame(
-        [
-            ["Supplier", supplier_col],
-            ["Country", country_col],
-            ["Material", material_col],
-            ["Liefertreue", delivery_col],
-            ["Lieferzeit", leadtime_col],
-            ["Qualitätsrate", quality_col],
-            ["Reklamationsquote", complaint_col],
-            ["Preisabweichung", price_col],
-            ["Score", score_col],
-            ["Status", status_col],
-            ["Anomaly_Flag", anomaly_col],
-            ["Supplier_ID", supplier_id_col],
-            ["Month", month_col],
-        ],
-        columns=["Interne Dashboard-Spalte", "Zugeordnete Excel-Spalte"],
-    )
-    st.dataframe(mapping_preview, use_container_width=True, hide_index=True)
+# Optional mapping preview
+with st.expander("Interne Spaltenzuordnung anzeigen"):
+    preview = pd.DataFrame({
+        "Dashboard-Feld": list(required.keys()) + ["Score", "Status", "Anomaly_Flag", "Supplier_ID", "Month"],
+        "Excel-Spalte": [supplier_col, country_col, material_col, delivery_col, leadtime_col, quality_col, complaint_col, price_col, score_col, status_col, anomaly_col, supplier_id_col, month_col]
+    })
+    st.dataframe(preview, use_container_width=True, hide_index=True)
