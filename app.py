@@ -12,15 +12,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# =========================================================
-# PREMIUM STYLING - REFINED ENTERPRISE AESTHETIC
-# =========================================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
-    * {
-        font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    *, *::before, *::after {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
     }
 
     .stApp {
@@ -35,8 +32,8 @@ st.markdown("""
     }
 
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, rgba(13, 15, 34, 0.95) 100%);
-        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, rgba(10,14,39,0.95) 0%, rgba(13,15,34,0.95) 100%);
+        border-right: 1px solid rgba(255,255,255,0.08);
         backdrop-filter: blur(10px);
     }
 
@@ -66,165 +63,216 @@ st.markdown("""
     }
 
     .premium-card {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(25, 35, 50, 0.4) 100%);
-        border: 1px solid rgba(148, 163, 184, 0.12);
+        background: linear-gradient(135deg, rgba(30,41,59,0.6) 0%, rgba(25,35,50,0.4) 100%);
+        border: 1px solid rgba(148,163,184,0.12);
         border-radius: 16px;
         padding: 24px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
         backdrop-filter: blur(20px);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        margin-bottom: 1rem;
     }
 
     .premium-card:hover {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(25, 35, 50, 0.6) 100%);
-        border-color: rgba(148, 163, 184, 0.25);
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        background: linear-gradient(135deg, rgba(30,41,59,0.8) 0%, rgba(25,35,50,0.6) 100%);
+        border-color: rgba(148,163,184,0.25);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
     }
 
     .metric-card {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(25, 35, 50, 0.3) 100%);
-        border: 1px solid rgba(96, 165, 250, 0.15);
+        background: linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(25,35,50,0.3) 100%);
+        border: 1px solid rgba(96,165,250,0.15);
         border-radius: 14px;
         padding: 20px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        box-shadow: 0 6px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
         backdrop-filter: blur(15px);
         min-height: 140px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         transition: all 0.3s ease;
+        margin-bottom: 0.5rem;
     }
 
     .metric-card:hover {
-        border-color: rgba(96, 165, 250, 0.3);
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(25, 35, 50, 0.5) 100%);
+        border-color: rgba(96,165,250,0.3);
+        background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(25,35,50,0.5) 100%);
     }
 
     .metric-label {
-        font-size: 0.85rem;
+        font-size: 0.78rem;
         color: #9ca3af;
         font-weight: 600;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.1em;
     }
 
     .metric-value {
-        font-size: 2.4rem;
+        font-size: 1.85rem;
         font-weight: 800;
         background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
         background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         line-height: 1.2;
+        word-break: break-word;
     }
 
     .metric-sub {
-        margin-top: 12px;
+        margin-top: 10px;
         color: #6b7280;
-        font-size: 0.82rem;
+        font-size: 0.78rem;
         font-weight: 500;
     }
 
+    /* ── inline KPI grid inside premium-card ── */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 8px 0 12px;
+    }
+
+    .kpi-cell {
+        background: rgba(30,41,59,0.5);
+        border: 1px solid rgba(96,165,250,0.12);
+        border-radius: 10px;
+        padding: 12px 14px;
+    }
+
+    .kpi-cell-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 4px;
+    }
+
+    .kpi-cell-value {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #f1f5f9;
+        line-height: 1.2;
+    }
+
+    .kpi-cell-delta {
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-top: 2px;
+    }
+
+    .delta-pos { color: #4ade80; }
+    .delta-neg { color: #f87171; }
+
     .supplier-item {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(25, 35, 50, 0.2) 100%);
-        border: 1px solid rgba(96, 165, 250, 0.1);
+        background: linear-gradient(135deg, rgba(30,41,59,0.4) 0%, rgba(25,35,50,0.2) 100%);
+        border: 1px solid rgba(96,165,250,0.1);
         border-radius: 12px;
         padding: 16px;
         margin-bottom: 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
         transition: all 0.3s ease;
     }
 
     .supplier-item:hover {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(25, 35, 50, 0.4) 100%);
-        border-color: rgba(96, 165, 250, 0.25);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+        background: linear-gradient(135deg, rgba(30,41,59,0.6) 0%, rgba(25,35,50,0.4) 100%);
+        border-color: rgba(96,165,250,0.25);
+        box-shadow: 0 6px 24px rgba(0,0,0,0.3);
     }
 
     .supplier-name {
         font-weight: 700;
         color: #f1f5f9;
-        font-size: 1.05rem;
-        margin-bottom: 6px;
+        font-size: 1.0rem;
+        margin-bottom: 4px;
+        letter-spacing: -0.01em;
     }
 
     .supplier-meta {
         color: #9ca3af;
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         font-weight: 500;
     }
 
     .badge {
         display: inline-block;
-        padding: 6px 12px;
+        padding: 5px 11px;
         border-radius: 20px;
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         font-weight: 600;
         margin-right: 6px;
         margin-bottom: 4px;
+        letter-spacing: 0.02em;
     }
 
     .badge-success {
-        background: rgba(34, 197, 94, 0.15);
+        background: rgba(34,197,94,0.15);
         color: #86efac;
-        border: 1px solid rgba(34, 197, 94, 0.3);
+        border: 1px solid rgba(34,197,94,0.3);
     }
 
     .badge-warning {
-        background: rgba(251, 146, 60, 0.15);
+        background: rgba(251,146,60,0.15);
         color: #fed7aa;
-        border: 1px solid rgba(251, 146, 60, 0.3);
+        border: 1px solid rgba(251,146,60,0.3);
     }
 
     .badge-danger {
-        background: rgba(239, 68, 68, 0.15);
+        background: rgba(239,68,68,0.15);
         color: #fca5a5;
-        border: 1px solid rgba(239, 68, 68, 0.3);
+        border: 1px solid rgba(239,68,68,0.3);
     }
 
     .section-title {
-        font-size: 1.25rem;
-        font-weight: 800;
+        font-size: 1.1rem;
+        font-weight: 700;
         color: #f1f5f9;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
         letter-spacing: -0.01em;
     }
 
     .insight-box {
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%);
-        border: 1px solid rgba(34, 197, 94, 0.2);
+        background: linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(34,197,94,0.04) 100%);
+        border: 1px solid rgba(34,197,94,0.2);
         border-radius: 12px;
-        padding: 16px;
+        padding: 14px 16px;
         color: #d1fae5;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
         backdrop-filter: blur(10px);
+        font-size: 0.9rem;
+        line-height: 1.6;
     }
 
     .warning-box {
-        background: linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(251, 146, 60, 0.04) 100%);
-        border: 1px solid rgba(251, 146, 60, 0.2);
+        background: linear-gradient(135deg, rgba(251,146,60,0.08) 0%, rgba(251,146,60,0.04) 100%);
+        border: 1px solid rgba(251,146,60,0.2);
         border-radius: 12px;
-        padding: 16px;
+        padding: 14px 16px;
         color: #ffedd5;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
         backdrop-filter: blur(10px);
+        font-size: 0.9rem;
+        line-height: 1.6;
     }
 
     .critical-box {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%);
-        border: 1px solid rgba(239, 68, 68, 0.2);
+        background: linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0.04) 100%);
+        border: 1px solid rgba(239,68,68,0.2);
         border-radius: 12px;
-        padding: 16px;
+        padding: 14px 16px;
         color: #fecaca;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
         backdrop-filter: blur(10px);
+        font-size: 0.9rem;
+        line-height: 1.6;
     }
 
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background: transparent;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        border-bottom: 1px solid rgba(148,163,184,0.1);
     }
 
     .stTabs [data-baseweb="tab"] {
@@ -234,57 +282,39 @@ st.markdown("""
         color: #9ca3af;
         font-weight: 600;
         padding: 0 18px;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         transition: all 0.3s ease;
         border: none;
     }
 
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, rgba(96, 165, 250, 0.15) 0%, rgba(96, 165, 250, 0.08) 100%) !important;
+        background: linear-gradient(135deg, rgba(96,165,250,0.15) 0%, rgba(96,165,250,0.08) 100%) !important;
         color: #60a5fa !important;
         border-bottom: 2px solid #3b82f6 !important;
     }
 
     .stButton > button {
         border-radius: 10px;
-        border: 1px solid rgba(96, 165, 250, 0.3);
+        border: 1px solid rgba(96,165,250,0.3);
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white;
         font-weight: 600;
         padding: 10px 20px;
         transition: all 0.3s ease;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+        font-size: 0.9rem;
     }
 
     .stButton > button:hover {
-        border-color: rgba(96, 165, 250, 0.5);
-        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        border-color: rgba(96,165,250,0.5);
+        box-shadow: 0 6px 20px rgba(59,130,246,0.4);
         transform: translateY(-2px);
     }
 
-    div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(25, 35, 50, 0.3) 100%);
-        border: 1px solid rgba(96, 165, 250, 0.15);
-        padding: 16px;
-        border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    }
-
-    div[data-testid="stMetric"] label {
-        color: #9ca3af !important;
-        font-weight: 600 !important;
-    }
-
-    div[data-testid="stMetric"] > div:nth-child(2) {
-        color: #60a5fa !important;
-        font-size: 2rem !important;
-        font-weight: 800 !important;
-    }
-
     ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.3); }
-    ::-webkit-scrollbar-thumb { background: rgba(96, 165, 250, 0.3); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(96, 165, 250, 0.5); }
+    ::-webkit-scrollbar-track { background: rgba(30,41,59,0.3); }
+    ::-webkit-scrollbar-thumb { background: rgba(96,165,250,0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(96,165,250,0.5); }
 
     @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(20px); }
@@ -383,11 +413,22 @@ def plotly_dark_layout(**kwargs):
     base = dict(
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#9ca3af"),
+        font=dict(color="#9ca3af", family="Inter, -apple-system, sans-serif"),
         margin=dict(t=40, b=40, l=40, r=40),
     )
     base.update(kwargs)
     return base
+
+def delta_html(val, target, invert=False):
+    """Return HTML delta span. invert=True means lower is better."""
+    diff = val - target
+    if invert:
+        good = diff <= 0
+    else:
+        good = diff >= 0
+    cls = "delta-pos" if good else "delta-neg"
+    sign = "+" if diff > 0 else ""
+    return f'<span class="kpi-cell-delta {cls}">{sign}{diff:.1f}</span>'
 
 # =========================================================
 # HEADER
@@ -496,7 +537,7 @@ with st.sidebar:
 sel = filtered[filtered["Supplier"] == sel_sup].iloc[0]
 
 # =========================================================
-# TOP KPI CARDS
+# TOP KPI CARDS  — pure HTML, no st.metric() inside divs
 # =========================================================
 st.markdown("")
 for col, (icon, label, value, sub) in zip(
@@ -512,9 +553,9 @@ for col, (icon, label, value, sub) in zip(
     with col:
         st.markdown(f"""
         <div class="metric-card">
-            <div style="font-size:1.5rem;margin-bottom:8px;">{icon}</div>
+            <div style="font-size:1.4rem;margin-bottom:6px;">{icon}</div>
             <div class="metric-label">{label}</div>
-            <div class="metric-value" style="font-size:1.8rem;">{value}</div>
+            <div class="metric-value">{value}</div>
             <div class="metric-sub">{sub}</div>
         </div>""", unsafe_allow_html=True)
 
@@ -548,37 +589,79 @@ with tab1:
                         <div class="supplier-name">#{rank} {row['Supplier']}</div>
                         <div class="supplier-meta">{row['Material']} · {row['Country']}</div>
                     </div>
-                    <span class="badge badge-{lvl}" style="font-size:0.9rem;font-weight:700;">{row['Score']}</span>
+                    <span class="badge badge-{lvl}" style="font-size:0.88rem;font-weight:700;">{row['Score']}</span>
                 </div>
                 <div style="margin-top:8px;">{ano_badge}</div>
             </div>""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c_mid:
-        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-        st.markdown(f'<div class="section-title">📍 {sel["Supplier"]}</div>', unsafe_allow_html=True)
-        ca, cb = st.columns(2)
-        with ca:
-            st.metric("ID",       sel["Supplier_ID"])
-            st.metric("Category", sel["Material"])
-        with cb:
-            st.metric("Country",  sel["Country"])
-            st.metric("Status",   sel["Status"])
-        st.write("")
-        cc, cd = st.columns(2)
-        ce, cf = st.columns(2)
-        with cc: st.metric("On-Time Delivery", f"{sel['Liefertreue']:.1f}%",      f"{sel['Liefertreue']-95:.1f}%")
-        with cd: st.metric("Quality Score",    f"{sel['Qualitätsrate']:.1f}%",    f"{sel['Qualitätsrate']-97:.1f}%")
-        with ce: st.metric("Lead Time",        f"{sel['Lieferzeit']:.1f} d",      f"{sel['Lieferzeit']-10:.1f} d")
-        with cf: st.metric("Complaint Rate",   f"{sel['Reklamationsquote']:.2f}%",f"{sel['Reklamationsquote']-1.0:.2f}%")
-        st.markdown('</div>', unsafe_allow_html=True)
+        # ── Pure-HTML supplier detail card — no st.metric() inside raw HTML divs ──
+        d_lt  = sel['Liefertreue']  - 95
+        d_q   = sel['Qualitätsrate'] - 97
+        d_ld  = sel['Lieferzeit']   - 10
+        d_rc  = sel['Reklamationsquote'] - 1.0
+
+        def delta_span(diff, invert=False):
+            good = (diff <= 0) if invert else (diff >= 0)
+            cls  = "delta-pos" if good else "delta-neg"
+            sign = "+" if diff > 0 else ""
+            return f'<span class="kpi-cell-delta {cls}">{sign}{diff:.1f}</span>'
+
+        st.markdown(f"""
+        <div class="premium-card">
+            <div class="section-title">📍 {sel['Supplier']}</div>
+
+            <div class="kpi-grid">
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">ID</div>
+                    <div class="kpi-cell-value">{sel['Supplier_ID']}</div>
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Category</div>
+                    <div class="kpi-cell-value">{sel['Material']}</div>
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Country</div>
+                    <div class="kpi-cell-value">{sel['Country']}</div>
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Status</div>
+                    <div class="kpi-cell-value">{sel['Status']}</div>
+                </div>
+            </div>
+
+            <div class="kpi-grid">
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">On-Time Delivery</div>
+                    <div class="kpi-cell-value">{sel['Liefertreue']:.1f}%</div>
+                    {delta_span(d_lt)}
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Quality Score</div>
+                    <div class="kpi-cell-value">{sel['Qualitätsrate']:.1f}%</div>
+                    {delta_span(d_q)}
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Lead Time</div>
+                    <div class="kpi-cell-value">{sel['Lieferzeit']:.1f} d</div>
+                    {delta_span(d_ld, invert=True)}
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Complaint Rate</div>
+                    <div class="kpi-cell-value">{sel['Reklamationsquote']:.2f}%</div>
+                    {delta_span(d_rc, invert=True)}
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     with c_right:
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">🎯 Overall Score</div>', unsafe_allow_html=True)
         st.plotly_chart(donut_chart(sel["Score"], score_color(sel["Score"])), use_container_width=True, config={"displayModeBar": False})
         risk_cls = "badge-success" if sel["Risk"] == "Low" else "badge-warning" if sel["Risk"] == "Medium" else "badge-danger"
-        st.markdown(f'<span class="badge {risk_cls}" style="font-size:0.9rem;">Risk: {sel["Risk"]}</span>', unsafe_allow_html=True)
+        st.markdown(f'<span class="badge {risk_cls}" style="font-size:0.88rem;">Risk: {sel["Risk"]}</span>', unsafe_allow_html=True)
         st.write("")
         st.markdown(f"**Critical KPI:** {sel['Crit_KPI']}")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -602,15 +685,15 @@ with tab2:
             st.markdown(f"""
             <div class="insight-box">
                 <b>Top {i}: {row['Supplier']}</b><br>
-                <span style="font-size:0.9rem;">Score: {row['Score']} | {row['Material']} | {row['Country']}</span><br>
-                <span style="font-size:0.85rem;opacity:0.9;">Strengths: {row['Strengths']}</span>
+                Score: {row['Score']} · {row['Material']} · {row['Country']}<br>
+                <span style="opacity:0.85;">Strengths: {row['Strengths']}</span>
             </div>""", unsafe_allow_html=True)
         for _, row in filtered.sort_values("Score").head(2).iterrows():
             st.markdown(f"""
             <div class="warning-box">
                 <b>⚠️ Attention: {row['Supplier']}</b><br>
-                <span style="font-size:0.9rem;">Critical: {row['Crit_KPI']} | Score: {row['Score']}</span><br>
-                <span style="font-size:0.85rem;opacity:0.9;">Action: Monitor performance closely.</span>
+                Critical: {row['Crit_KPI']} · Score: {row['Score']}<br>
+                <span style="opacity:0.85;">Action: Monitor performance closely.</span>
             </div>""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -681,18 +764,40 @@ with tab4:
     cp1, cp2 = st.columns([1.1, 1.1])
 
     with cp1:
-        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">👤 Supplier Profile</div>', unsafe_allow_html=True)
         st.markdown(f"""
-**Supplier ID:** {sel['Supplier_ID']}  
-**Supplier Name:** {sel['Supplier']}  
-**Category:** {sel['Material']}  
-**Country:** {sel['Country']}  
-**Status:** {sel['Status']}  
-**Risk Level:** {sel['Risk']}  
-**Critical KPI:** {sel['Crit_KPI']}  
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
+        <div class="premium-card">
+            <div class="section-title">👤 Supplier Profile</div>
+            <div class="kpi-grid">
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Supplier ID</div>
+                    <div class="kpi-cell-value">{sel['Supplier_ID']}</div>
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Supplier Name</div>
+                    <div class="kpi-cell-value">{sel['Supplier']}</div>
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Category</div>
+                    <div class="kpi-cell-value">{sel['Material']}</div>
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Country</div>
+                    <div class="kpi-cell-value">{sel['Country']}</div>
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Status</div>
+                    <div class="kpi-cell-value">{sel['Status']}</div>
+                </div>
+                <div class="kpi-cell">
+                    <div class="kpi-cell-label">Risk Level</div>
+                    <div class="kpi-cell-value">{sel['Risk']}</div>
+                </div>
+            </div>
+            <div style="margin-top:4px;font-size:0.88rem;color:#9ca3af;">
+                Critical KPI: <span style="color:#f1f5f9;font-weight:600;">{sel['Crit_KPI']}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         if sel["Score"] >= 90:
             st.markdown(f'<div class="insight-box"><b>✅ Recommendation</b><br>{sel["Supplier"]} is a preferred supplier. Strengths: {sel["Strengths"]}</div>', unsafe_allow_html=True)
