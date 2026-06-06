@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
-# COLUMN NAME CONSTANTS
+# COLUMN CONSTANTS
 # ──────────────────────────────────────────────────────────────────────────────
 COL_SUPPLIER = "Supplier_Name"
 COL_COUNTRY = "Country"
@@ -48,8 +48,24 @@ REQUIRED_COLS = [
     COL_PRICE_DEV,
 ]
 
+DEFAULT_SETTINGS = {
+    "delivery_target": 95.0,
+    "quality_target": 97.0,
+    "leadtime_limit": 10.0,
+    "complaint_limit": 1.0,
+    "price_dev_tolerance": 1.0,
+    "anomaly_sensitivity": "Medium",
+    "top_supplier_rows": 14,
+    "show_country_flags": True,
+    "show_delivery_trend": True,
+}
+
+for key, value in DEFAULT_SETTINGS.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
+
 # ──────────────────────────────────────────────────────────────────────────────
-# CSS
+# CSS — IMPORTANT: KEEP INSIDE st.markdown
 # ──────────────────────────────────────────────────────────────────────────────
 st.markdown(
     """
@@ -74,7 +90,7 @@ html, body, [class*="css"] {
     visibility: hidden !important;
 }
 
-/* IMPORTANT: do not hide Streamlit header, otherwise sidebar cannot reopen */
+/* Do not hide Streamlit header, otherwise sidebar cannot reopen */
 header[data-testid="stHeader"] {
     visibility: visible !important;
     background: transparent !important;
@@ -127,7 +143,6 @@ section[data-testid="stSidebar"] * {
     margin: 1rem 0.35rem 0.35rem 0.35rem;
 }
 
-/* Real Streamlit radio navigation */
 div[role="radiogroup"] label {
     background: transparent !important;
     border-radius: 8px !important;
@@ -174,14 +189,18 @@ input[aria-autocomplete="list"] {
 .stSelectbox label,
 .stTextInput label,
 .stFileUploader label,
-.stRadio label {
+.stRadio label,
+.stSlider label,
+.stCheckbox label,
+.stNumberInput label {
     color: #8b949e !important;
     font-size: 0.78rem !important;
     font-weight: 750 !important;
 }
 
 div[data-baseweb="select"] > div,
-.stTextInput input {
+.stTextInput input,
+.stNumberInput input {
     background: #21262d !important;
     border: 1px solid #30363d !important;
     color: #e6edf3 !important;
@@ -229,11 +248,15 @@ div[data-baseweb="select"] > div,
 }
 
 @media (max-width: 1450px) {
-    .metric-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+    .metric-grid {
+        grid-template-columns: repeat(3, minmax(160px, 1fr));
+    }
 }
 
 @media (max-width: 900px) {
-    .metric-grid { grid-template-columns: repeat(1, minmax(160px, 1fr)); }
+    .metric-grid {
+        grid-template-columns: repeat(1, minmax(160px, 1fr));
+    }
 }
 
 .kpi-card {
@@ -400,7 +423,67 @@ div[data-testid="stDataFrame"] {
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
-# HELPERS
+# SETTINGS HELPERS
+# ──────────────────────────────────────────────────────────────────────────────
+def reset_settings() -> None:
+    for key, value in DEFAULT_SETTINGS.items():
+        st.session_state[key] = value
+
+
+def get_rules() -> dict:
+    return {
+        "delivery_target": float(st.session_state["delivery_target"]),
+        "quality_target": float(st.session_state["quality_target"]),
+        "leadtime_limit": float(st.session_state["leadtime_limit"]),
+        "complaint_limit": float(st.session_state["complaint_limit"]),
+        "price_dev_tolerance": float(st.session_state["price_dev_tolerance"]),
+        "anomaly_sensitivity": str(st.session_state["anomaly_sensitivity"]),
+    }
+
+
+def get_effective_rules() -> dict:
+    rules = get_rules()
+    sensitivity = rules["anomaly_sensitivity"]
+
+    delivery_target = rules["delivery_target"]
+    quality_target = rules["quality_target"]
+    leadtime_limit = rules["leadtime_limit"]
+    complaint_limit = rules["complaint_limit"]
+    price_dev_tolerance = rules["price_dev_tolerance"]
+
+    if sensitivity == "Low":
+        delivery_threshold = max(0.0, delivery_target - 5.0)
+        quality_threshold = max(0.0, quality_target - 3.0)
+        leadtime_threshold = leadtime_limit + 3.0
+        complaint_threshold = complaint_limit + 0.5
+        price_threshold = price_dev_tolerance + 1.0
+    elif sensitivity == "High":
+        delivery_threshold = min(100.0, delivery_target + 1.0)
+        quality_threshold = min(100.0, quality_target + 1.0)
+        leadtime_threshold = max(0.1, leadtime_limit - 2.0)
+        complaint_threshold = max(0.1, complaint_limit - 0.2)
+        price_threshold = max(0.1, price_dev_tolerance - 0.3)
+    else:
+        delivery_threshold = delivery_target
+        quality_threshold = quality_target
+        leadtime_threshold = leadtime_limit
+        complaint_threshold = complaint_limit
+        price_threshold = price_dev_tolerance
+
+    return {
+        **rules,
+        "delivery_threshold": delivery_threshold,
+        "quality_threshold": quality_threshold,
+        "leadtime_threshold": leadtime_threshold,
+        "complaint_threshold": complaint_threshold,
+        "price_threshold": price_threshold,
+    }
+
+
+RULES = get_effective_rules()
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GENERAL HELPERS
 # ──────────────────────────────────────────────────────────────────────────────
 def clean_cols(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
@@ -425,16 +508,20 @@ def to_num(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 def calc_score(row: pd.Series) -> float:
     score = 100.0
 
-    if pd.notna(row.get(COL_DELIVERY)) and row[COL_DELIVERY] < 95:
-        score -= (95 - row[COL_DELIVERY]) * 1.8
-    if pd.notna(row.get(COL_LEADTIME)) and row[COL_LEADTIME] > 10:
-        score -= (row[COL_LEADTIME] - 10) * 2.0
-    if pd.notna(row.get(COL_QUALITY)) and row[COL_QUALITY] < 97:
-        score -= (97 - row[COL_QUALITY]) * 2.5
-    if pd.notna(row.get(COL_COMPLAINT)) and row[COL_COMPLAINT] > 1.0:
-        score -= (row[COL_COMPLAINT] - 1.0) * 8.0
-    if pd.notna(row.get(COL_PRICE_DEV)) and abs(row[COL_PRICE_DEV]) > 1.0:
-        score -= (abs(row[COL_PRICE_DEV]) - 1.0) * 3.5
+    if pd.notna(row.get(COL_DELIVERY)) and row[COL_DELIVERY] < float(RULES["delivery_target"]):
+        score -= (float(RULES["delivery_target"]) - row[COL_DELIVERY]) * 1.8
+
+    if pd.notna(row.get(COL_LEADTIME)) and row[COL_LEADTIME] > float(RULES["leadtime_limit"]):
+        score -= (row[COL_LEADTIME] - float(RULES["leadtime_limit"])) * 2.0
+
+    if pd.notna(row.get(COL_QUALITY)) and row[COL_QUALITY] < float(RULES["quality_target"]):
+        score -= (float(RULES["quality_target"]) - row[COL_QUALITY]) * 2.5
+
+    if pd.notna(row.get(COL_COMPLAINT)) and row[COL_COMPLAINT] > float(RULES["complaint_limit"]):
+        score -= (row[COL_COMPLAINT] - float(RULES["complaint_limit"])) * 8.0
+
+    if pd.notna(row.get(COL_PRICE_DEV)) and abs(row[COL_PRICE_DEV]) > float(RULES["price_dev_tolerance"]):
+        score -= (abs(row[COL_PRICE_DEV]) - float(RULES["price_dev_tolerance"])) * 3.5
 
     return max(round(score, 1), 0.0)
 
@@ -510,7 +597,9 @@ def country_flag(country: str) -> str:
 
 def country_with_flag(country: str) -> str:
     text = str(country).strip()
-    return f"{country_flag(text)} {text}"
+    if st.session_state["show_country_flags"]:
+        return f"{country_flag(text)} {text}"
+    return text
 
 
 def price_signal(value: float) -> str:
@@ -549,15 +638,19 @@ def plotly_theme(height: int = 280) -> dict:
 def issue_text(row: pd.Series) -> str:
     issues = []
 
-    if pd.notna(row.get("Delivery")) and row["Delivery"] < 95:
-        issues.append(f"Delivery below target ({row['Delivery']:.1f}%)")
-    if pd.notna(row.get("Quality")) and row["Quality"] < 97:
-        issues.append(f"Quality below target ({row['Quality']:.1f}%)")
-    if pd.notna(row.get("LeadTime")) and row["LeadTime"] > 10:
-        issues.append(f"Lead time above target ({row['LeadTime']:.1f} days)")
-    if pd.notna(row.get("Complaint")) and row["Complaint"] > 1:
+    if pd.notna(row.get("Delivery")) and row["Delivery"] < float(RULES["delivery_threshold"]):
+        issues.append(f"Delivery below threshold ({row['Delivery']:.1f}%)")
+
+    if pd.notna(row.get("Quality")) and row["Quality"] < float(RULES["quality_threshold"]):
+        issues.append(f"Quality below threshold ({row['Quality']:.1f}%)")
+
+    if pd.notna(row.get("LeadTime")) and row["LeadTime"] > float(RULES["leadtime_threshold"]):
+        issues.append(f"Lead time above threshold ({row['LeadTime']:.1f} days)")
+
+    if pd.notna(row.get("Complaint")) and row["Complaint"] > float(RULES["complaint_threshold"]):
         issues.append(f"Complaint rate high ({row['Complaint']:.2f}%)")
-    if pd.notna(row.get("PriceDev")) and abs(row["PriceDev"]) > 1:
+
+    if pd.notna(row.get("PriceDev")) and abs(row["PriceDev"]) > float(RULES["price_threshold"]):
         issues.append(f"Price deviation outside tolerance ({row['PriceDev']:+.2f}%)")
 
     return " · ".join(issues) if issues else "No critical KPI issue"
@@ -569,7 +662,7 @@ def load_excel(uploaded_file) -> pd.DataFrame:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# SIDEBAR NAVIGATION
+# SIDEBAR
 # ──────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div class="logo-box">📦 SupplierDash</div>', unsafe_allow_html=True)
@@ -597,7 +690,7 @@ with st.sidebar:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# HEADER + FILE UPLOAD
+# HEADER + UPLOAD
 # ──────────────────────────────────────────────────────────────────────────────
 now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
 st.markdown(
@@ -617,9 +710,100 @@ upload_col, note_col = st.columns([1.4, 4.8])
 with upload_col:
     uploaded_file = st.file_uploader("Upload supplier Excel", type=["xlsx", "xls"], label_visibility="collapsed")
 with note_col:
-    st.caption("Upload your supplier KPI Excel file. Filters, charts, tables, and selected supplier profile update automatically.")
+    st.caption("Upload your supplier KPI Excel file. Filters, charts, settings, tables, and selected supplier profile update automatically.")
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SETTINGS PAGE
+# ──────────────────────────────────────────────────────────────────────────────
+def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFrame | None = None) -> None:
+    st.markdown('<div class="s-card"><div class="s-card-title">⚙️ Dashboard Settings</div>', unsafe_allow_html=True)
+    st.caption("These settings control KPI cards, anomaly detection, risk scoring, profile colors, and supplier table display.")
+
+    s1, s2 = st.columns(2)
+
+    with s1:
+        st.markdown("#### KPI Targets")
+        st.slider("Delivery target (%)", 50.0, 100.0, key="delivery_target", step=0.5)
+        st.slider("Quality target (%)", 50.0, 100.0, key="quality_target", step=0.5)
+        st.slider("Lead time limit (days)", 1.0, 60.0, key="leadtime_limit", step=0.5)
+        st.slider("Complaint rate limit (%)", 0.0, 20.0, key="complaint_limit", step=0.1)
+        st.slider("Price deviation tolerance (+/- %)", 0.0, 25.0, key="price_dev_tolerance", step=0.1)
+
+    with s2:
+        st.markdown("#### Anomaly & Display")
+        st.selectbox(
+            "Anomaly sensitivity",
+            ["Low", "Medium", "High"],
+            index=["Low", "Medium", "High"].index(st.session_state["anomaly_sensitivity"]),
+            key="anomaly_sensitivity",
+            help="Low = fewer alerts, Medium = normal rules, High = stricter alerts.",
+        )
+        st.slider("Top supplier table rows", 5, 50, key="top_supplier_rows", step=1)
+        st.checkbox("Show country flags", key="show_country_flags")
+        st.checkbox("Show delivery trend line in Top Suppliers", key="show_delivery_trend")
+
+        st.markdown("#### Reset")
+        if st.button("Reset all settings to default"):
+            reset_settings()
+            st.rerun()
+
+    effective = get_effective_rules()
+
+    st.markdown("#### Effective Anomaly Thresholds")
+    threshold_df = pd.DataFrame(
+        {
+            "Rule": [
+                "Delivery alert if below",
+                "Quality alert if below",
+                "Lead time alert if above",
+                "Complaint rate alert if above",
+                "Price deviation alert if outside",
+            ],
+            "Effective Threshold": [
+                f"{effective['delivery_threshold']:.1f}%",
+                f"{effective['quality_threshold']:.1f}%",
+                f"{effective['leadtime_threshold']:.1f} days",
+                f"{effective['complaint_threshold']:.2f}%",
+                f"±{effective['price_threshold']:.2f}%",
+            ],
+        }
+    )
+    st.dataframe(threshold_df, use_container_width=True, hide_index=True)
+
+    st.markdown("#### Data Quality Overview")
+
+    if raw_data is None:
+        st.info("Upload an Excel file to see data quality checks here.")
+    else:
+        duplicate_rows = int(raw_data.duplicated().sum())
+        missing_values = int(raw_data.isna().sum().sum())
+        total_rows = len(raw_data)
+        total_columns = len(raw_data.columns)
+        valid_rows = len(clean_data) if clean_data is not None else 0
+
+        dq1, dq2, dq3, dq4 = st.columns(4)
+        dq1.metric("Uploaded Rows", f"{total_rows}")
+        dq2.metric("Valid Rows Used", f"{valid_rows}")
+        dq3.metric("Columns Detected", f"{total_columns}")
+        dq4.metric("Missing Values", f"{missing_values}")
+
+        st.caption(f"Duplicate full rows detected: {duplicate_rows}")
+
+        detected_columns = pd.DataFrame({"Detected Columns": raw_data.columns.astype(str).tolist()})
+        st.dataframe(detected_columns, use_container_width=True, hide_index=True, height=240)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NO FILE YET
+# ──────────────────────────────────────────────────────────────────────────────
 if uploaded_file is None:
+    if page == "⚙️ Settings":
+        render_settings()
+        st.stop()
+
     st.markdown(
         """
 <div class="s-card" style="max-width:650px;margin:55px auto;text-align:center;">
@@ -638,7 +822,7 @@ if uploaded_file is None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# LOAD, MAP, VALIDATE DATA
+# LOAD AND PROCESS DATA
 # ──────────────────────────────────────────────────────────────────────────────
 raw = load_excel(uploaded_file)
 
@@ -684,40 +868,25 @@ if df.empty:
 if COL_ID not in df.columns:
     df[COL_ID] = [f"S{i + 1:03d}" for i in range(len(df))]
 
-if COL_SCORE not in df.columns or df[COL_SCORE].isna().all():
-    df[COL_SCORE] = df.apply(calc_score, axis=1)
-else:
-    calculated_scores = df.apply(calc_score, axis=1)
-    df[COL_SCORE] = df[COL_SCORE].fillna(calculated_scores)
-
 if COL_SPEND not in df.columns:
     df[COL_SPEND] = np.nan
 
+df[COL_SCORE] = df.apply(calc_score, axis=1)
 df["_risk"] = df[COL_SCORE].apply(risk_label)
+df[COL_STATUS] = df["_risk"].apply(status_text_from_risk)
 
-if COL_STATUS not in df.columns:
-    df[COL_STATUS] = df["_risk"].apply(status_text_from_risk)
-else:
-    df[COL_STATUS] = df[COL_STATUS].fillna(df["_risk"].apply(status_text_from_risk))
 
-if COL_ANOMALY in df.columns:
-    def normalize_anomaly(value) -> int:
-        if pd.isna(value):
-            return 0
-        return 1 if str(value).strip().lower() in {"yes", "ja", "y", "true", "1", "critical", "kritisch"} else 0
+def count_anomalies(row: pd.Series) -> int:
+    count = 0
+    count += int(pd.notna(row[COL_DELIVERY]) and row[COL_DELIVERY] < float(RULES["delivery_threshold"]))
+    count += int(pd.notna(row[COL_LEADTIME]) and row[COL_LEADTIME] > float(RULES["leadtime_threshold"]))
+    count += int(pd.notna(row[COL_QUALITY]) and row[COL_QUALITY] < float(RULES["quality_threshold"]))
+    count += int(pd.notna(row[COL_COMPLAINT]) and row[COL_COMPLAINT] > float(RULES["complaint_threshold"]))
+    count += int(pd.notna(row[COL_PRICE_DEV]) and abs(row[COL_PRICE_DEV]) > float(RULES["price_threshold"]))
+    return count
 
-    df["_anomaly"] = df[COL_ANOMALY].apply(normalize_anomaly)
-else:
-    def count_anomalies(row: pd.Series) -> int:
-        count = 0
-        count += int(pd.notna(row[COL_DELIVERY]) and row[COL_DELIVERY] < 95)
-        count += int(pd.notna(row[COL_LEADTIME]) and row[COL_LEADTIME] > 10)
-        count += int(pd.notna(row[COL_QUALITY]) and row[COL_QUALITY] < 97)
-        count += int(pd.notna(row[COL_COMPLAINT]) and row[COL_COMPLAINT] > 1.0)
-        count += int(pd.notna(row[COL_PRICE_DEV]) and abs(row[COL_PRICE_DEV]) > 1.0)
-        return count
 
-    df["_anomaly"] = df.apply(count_anomalies, axis=1)
+df["_anomaly"] = df.apply(count_anomalies, axis=1)
 
 agg_dict = {
     "Supplier_ID": (COL_ID, "first"),
@@ -748,6 +917,22 @@ agg = (
 for numeric_col in ["Delivery", "LeadTime", "Quality", "Complaint", "PriceDev", "Score", "Spend"]:
     if numeric_col in agg.columns:
         agg[numeric_col] = pd.to_numeric(agg[numeric_col], errors="coerce").round(2)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SETTINGS ROUTE AFTER FILE UPLOAD
+# ──────────────────────────────────────────────────────────────────────────────
+if page == "⚙️ Settings":
+    render_settings(raw_data=raw, clean_data=df)
+    st.markdown(
+        """
+<div style="text-align:center;color:#6e7681;font-size:.75rem;padding:24px 0 8px;">
+SupplierDash · Interactive KPI Monitoring · Powered by Streamlit
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    st.stop()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -822,7 +1007,7 @@ st.markdown(
     <div>
       <div class="kpi-label">On-Time Delivery %</div>
       <div class="kpi-value">{avg_delivery:.1f}%</div>
-      <div class="{'kpi-good' if avg_delivery >= 95 else 'kpi-bad'}">{'▲ meets' if avg_delivery >= 95 else '▼ below'} 95% target</div>
+      <div class="{'kpi-good' if avg_delivery >= float(RULES['delivery_target']) else 'kpi-bad'}">{'▲ meets' if avg_delivery >= float(RULES['delivery_target']) else '▼ below'} {float(RULES['delivery_target']):.1f}% target</div>
     </div>
   </div>
 
@@ -831,7 +1016,7 @@ st.markdown(
     <div>
       <div class="kpi-label">Avg Lead Time</div>
       <div class="kpi-value">{avg_lead:.1f}d</div>
-      <div class="{'kpi-good' if avg_lead <= 10 else 'kpi-bad'}">{'▼ within' if avg_lead <= 10 else '▲ above'} 10d target</div>
+      <div class="{'kpi-good' if avg_lead <= float(RULES['leadtime_limit']) else 'kpi-bad'}">{'▼ within' if avg_lead <= float(RULES['leadtime_limit']) else '▲ above'} {float(RULES['leadtime_limit']):.1f}d target</div>
     </div>
   </div>
 
@@ -840,7 +1025,7 @@ st.markdown(
     <div>
       <div class="kpi-label">Quality Score</div>
       <div class="kpi-value">{avg_quality:.1f}%</div>
-      <div class="{'kpi-good' if avg_quality >= 97 else 'kpi-bad'}">{'▲ meets' if avg_quality >= 97 else '▼ below'} 97% target</div>
+      <div class="{'kpi-good' if avg_quality >= float(RULES['quality_target']) else 'kpi-bad'}">{'▲ meets' if avg_quality >= float(RULES['quality_target']) else '▼ below'} {float(RULES['quality_target']):.1f}% target</div>
     </div>
   </div>
 
@@ -849,7 +1034,7 @@ st.markdown(
     <div>
       <div class="kpi-label">Complaint Rate</div>
       <div class="kpi-value">{avg_complaint:.2f}%</div>
-      <div class="{'kpi-good' if avg_complaint <= 1 else 'kpi-bad'}">{'▼ within' if avg_complaint <= 1 else '▲ above'} 1% limit</div>
+      <div class="{'kpi-good' if avg_complaint <= float(RULES['complaint_limit']) else 'kpi-bad'}">{'▼ within' if avg_complaint <= float(RULES['complaint_limit']) else '▲ above'} {float(RULES['complaint_limit']):.1f}% limit</div>
     </div>
   </div>
 
@@ -919,10 +1104,10 @@ def render_supplier_profile(row: pd.Series) -> None:
   </div>
 
   <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
-    <div><div class="kpi-label">Delivery</div><div style="font-weight:900;color:{'#3fb950' if row['Delivery'] >= 95 else '#f85149'};">{row['Delivery']:.1f}%</div></div>
-    <div><div class="kpi-label">Quality</div><div style="font-weight:900;color:{'#3fb950' if row['Quality'] >= 97 else '#f85149'};">{row['Quality']:.1f}%</div></div>
-    <div><div class="kpi-label">Lead Time</div><div style="font-weight:900;color:{'#3fb950' if row['LeadTime'] <= 10 else '#f85149'};">{row['LeadTime']:.1f}d</div></div>
-    <div><div class="kpi-label">Complaints</div><div style="font-weight:900;color:{'#3fb950' if row['Complaint'] <= 1 else '#f85149'};">{row['Complaint']:.2f}%</div></div>
+    <div><div class="kpi-label">Delivery</div><div style="font-weight:900;color:{'#3fb950' if row['Delivery'] >= float(RULES['delivery_target']) else '#f85149'};">{row['Delivery']:.1f}%</div></div>
+    <div><div class="kpi-label">Quality</div><div style="font-weight:900;color:{'#3fb950' if row['Quality'] >= float(RULES['quality_target']) else '#f85149'};">{row['Quality']:.1f}%</div></div>
+    <div><div class="kpi-label">Lead Time</div><div style="font-weight:900;color:{'#3fb950' if row['LeadTime'] <= float(RULES['leadtime_limit']) else '#f85149'};">{row['LeadTime']:.1f}d</div></div>
+    <div><div class="kpi-label">Complaints</div><div style="font-weight:900;color:{'#3fb950' if row['Complaint'] <= float(RULES['complaint_limit']) else '#f85149'};">{row['Complaint']:.2f}%</div></div>
     <div><div class="kpi-label">Price Dev</div><div style="font-weight:900;color:{price_color};">{row['PriceDev']:+.2f}%</div></div>
     <div><div class="kpi-label">Anomalies</div><div style="font-weight:900;color:#e6edf3;">{int(row['Anomalies'])}</div></div>
   </div>
@@ -932,7 +1117,10 @@ def render_supplier_profile(row: pd.Series) -> None:
     )
 
 
-def render_top_table(data: pd.DataFrame, rows: int = 12) -> None:
+def render_top_table(data: pd.DataFrame, rows: int | None = None) -> None:
+    if rows is None:
+        rows = int(st.session_state["top_supplier_rows"])
+
     table_df = data[
         [
             COL_SUPPLIER,
@@ -950,30 +1138,31 @@ def render_top_table(data: pd.DataFrame, rows: int = 12) -> None:
     ].copy()
 
     table_df = table_df.sort_values("Score", ascending=False).head(rows).reset_index(drop=True)
-
     table_df["Country"] = table_df["Country"].apply(country_with_flag)
-    table_df["Delivery Trend"] = table_df.apply(
-        lambda row: stable_trend(row["Delivery"], row[COL_SUPPLIER]),
-        axis=1,
-    )
     table_df["Price Signal"] = table_df["PriceDev"].apply(price_signal)
 
-    display_df = table_df[
-        [
-            COL_SUPPLIER,
-            "Category",
-            "Country",
-            "Delivery",
-            "Delivery Trend",
-            "Quality",
-            "LeadTime",
-            "Complaint",
-            "Price Signal",
-            "Status",
-            "Risk",
-            "Score",
-        ]
-    ].copy()
+    display_cols = [
+        COL_SUPPLIER,
+        "Category",
+        "Country",
+        "Delivery",
+        "Quality",
+        "LeadTime",
+        "Complaint",
+        "Price Signal",
+        "Status",
+        "Risk",
+        "Score",
+    ]
+
+    if st.session_state["show_delivery_trend"]:
+        table_df["Delivery Trend"] = table_df.apply(
+            lambda row: stable_trend(row["Delivery"], row[COL_SUPPLIER]),
+            axis=1,
+        )
+        display_cols.insert(4, "Delivery Trend")
+
+    display_df = table_df[display_cols].copy()
 
     display_df = display_df.rename(
         columns={
@@ -986,56 +1175,60 @@ def render_top_table(data: pd.DataFrame, rows: int = 12) -> None:
         }
     )
 
+    column_config = {
+        "Supplier": st.column_config.TextColumn("Supplier", width="medium"),
+        "Category": st.column_config.TextColumn("Category", width="medium"),
+        "Country": st.column_config.TextColumn("Country", width="medium"),
+        "Delivery %": st.column_config.ProgressColumn(
+            "Delivery %",
+            format="%.1f%%",
+            min_value=0,
+            max_value=100,
+            width="medium",
+        ),
+        "Quality %": st.column_config.ProgressColumn(
+            "Quality %",
+            format="%.1f%%",
+            min_value=0,
+            max_value=100,
+            width="medium",
+        ),
+        "Lead Time": st.column_config.NumberColumn(
+            "Lead Time",
+            format="%.1f d",
+            width="small",
+        ),
+        "Complaint %": st.column_config.NumberColumn(
+            "Complaint %",
+            format="%.2f%%",
+            width="small",
+        ),
+        "Price Dev %": st.column_config.TextColumn("Price Dev %", width="small"),
+        "Status": st.column_config.TextColumn("Status", width="medium"),
+        "Risk": st.column_config.TextColumn("Risk", width="small"),
+        "Score": st.column_config.ProgressColumn(
+            "Score",
+            format="%.1f",
+            min_value=0,
+            max_value=100,
+            width="medium",
+        ),
+    }
+
+    if st.session_state["show_delivery_trend"]:
+        column_config["Delivery Trend"] = st.column_config.LineChartColumn(
+            "Delivery Trend",
+            y_min=0,
+            y_max=100,
+            width="medium",
+        )
+
     st.dataframe(
         display_df,
         use_container_width=True,
         hide_index=True,
         height=460,
-        column_config={
-            "Supplier": st.column_config.TextColumn("Supplier", width="medium"),
-            "Category": st.column_config.TextColumn("Category", width="medium"),
-            "Country": st.column_config.TextColumn("Country", width="medium"),
-            "Delivery %": st.column_config.ProgressColumn(
-                "Delivery %",
-                format="%.1f%%",
-                min_value=0,
-                max_value=100,
-                width="medium",
-            ),
-            "Delivery Trend": st.column_config.LineChartColumn(
-                "Delivery Trend",
-                y_min=0,
-                y_max=100,
-                width="medium",
-            ),
-            "Quality %": st.column_config.ProgressColumn(
-                "Quality %",
-                format="%.1f%%",
-                min_value=0,
-                max_value=100,
-                width="medium",
-            ),
-            "Lead Time": st.column_config.NumberColumn(
-                "Lead Time",
-                format="%.1f d",
-                width="small",
-            ),
-            "Complaint %": st.column_config.NumberColumn(
-                "Complaint %",
-                format="%.2f%%",
-                width="small",
-            ),
-            "Price Dev %": st.column_config.TextColumn("Price Dev %", width="small"),
-            "Status": st.column_config.TextColumn("Status", width="medium"),
-            "Risk": st.column_config.TextColumn("Risk", width="small"),
-            "Score": st.column_config.ProgressColumn(
-                "Score",
-                format="%.1f",
-                min_value=0,
-                max_value=100,
-                width="medium",
-            ),
-        },
+        column_config=column_config,
     )
 
 
@@ -1069,8 +1262,8 @@ def render_overview() -> None:
                 line=dict(color="#3fb950", width=2),
             )
         )
-        fig.add_hline(y=95, line_dash="dash", line_color="rgba(56,139,253,.45)", annotation_text="95% target")
-        fig.add_hline(y=97, line_dash="dash", line_color="rgba(63,185,80,.45)", annotation_text="97% target")
+        fig.add_hline(y=float(RULES["delivery_target"]), line_dash="dash", line_color="rgba(56,139,253,.45)", annotation_text="Delivery target")
+        fig.add_hline(y=float(RULES["quality_target"]), line_dash="dash", line_color="rgba(63,185,80,.45)", annotation_text="Quality target")
         fig.update_layout(**plotly_theme(300), xaxis_tickangle=-35)
 
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
@@ -1106,7 +1299,7 @@ def render_overview() -> None:
 
         st.markdown('<div class="s-card"><div class="s-card-title">🏆 Top Suppliers</div>', unsafe_allow_html=True)
         render_supplier_selector()
-        render_top_table(filt, rows=14)
+        render_top_table(filt)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
@@ -1166,8 +1359,8 @@ def render_performance() -> None:
             size_max=28,
             color_discrete_map={"Low": "#3fb950", "Medium": "#d29922", "High": "#f85149"},
         )
-        fig.add_vline(x=95, line_dash="dash", line_color="rgba(255,255,255,.25)")
-        fig.add_hline(y=97, line_dash="dash", line_color="rgba(255,255,255,.25)")
+        fig.add_vline(x=float(RULES["delivery_target"]), line_dash="dash", line_color="rgba(255,255,255,.25)")
+        fig.add_hline(y=float(RULES["quality_target"]), line_dash="dash", line_color="rgba(255,255,255,.25)")
         fig.update_layout(**plotly_theme(380), xaxis_title="Delivery %", yaxis_title="Quality %")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1184,8 +1377,8 @@ def render_performance() -> None:
             size_max=28,
             color_discrete_map={"Low": "#3fb950", "Medium": "#d29922", "High": "#f85149"},
         )
-        fig.add_vline(x=10, line_dash="dash", line_color="rgba(255,255,255,.25)")
-        fig.add_hline(y=1, line_dash="dash", line_color="rgba(255,255,255,.25)")
+        fig.add_vline(x=float(RULES["leadtime_limit"]), line_dash="dash", line_color="rgba(255,255,255,.25)")
+        fig.add_hline(y=float(RULES["complaint_limit"]), line_dash="dash", line_color="rgba(255,255,255,.25)")
         fig.update_layout(**plotly_theme(380), xaxis_title="Lead Time Days", yaxis_title="Complaint Rate %")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1381,11 +1574,6 @@ elif page == "📁 Documents":
     render_placeholder(
         "📁 Documents",
         "Document management placeholder for supplier certificates, quality documents, compliance files, and audit reports.",
-    )
-elif page == "⚙️ Settings":
-    render_placeholder(
-        "⚙️ Settings",
-        "Current KPI targets: Delivery ≥ 95%, Quality ≥ 97%, Lead Time ≤ 10 days, Complaint Rate ≤ 1%, and Price Deviation within ±1%.",
     )
 elif page == "👤 Users & Roles":
     render_placeholder(
