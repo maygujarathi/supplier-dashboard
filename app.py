@@ -1,9 +1,11 @@
-import streamlit as st
-import pandas as pd
+import hashlib
+from datetime import datetime
+
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+import streamlit as st
 
 st.set_page_config(
     page_title="SupplierDash",
@@ -13,7 +15,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────────
-# COLUMN NAME CONSTANTS  ← edit here only if your Excel uses other names
+# COLUMN NAME CONSTANTS — edit here only if your Excel uses other names
 # ─────────────────────────────────────────────────────────────────
 COL_SUPPLIER = "Supplier_Name"
 COL_COUNTRY = "Country"
@@ -23,30 +25,54 @@ COL_LEADTIME = "Lead_Time_Days"
 COL_QUALITY = "Quality_Score_%"
 COL_COMPLAINT = "Complaint_Rate_%"
 COL_PRICE_DEV = "Price_Deviation_%"
-COL_SCORE = "Overall_Score"       # optional — calculated if missing
-COL_STATUS = "Status"             # optional
-COL_ANOMALY = "Anomaly_Flag"      # optional
-COL_ID = "Supplier_ID"            # optional
-COL_SPEND = "Spend"               # optional
-COL_NOTES = "Notes"               # optional
+COL_SCORE = "Overall_Score"
+COL_STATUS = "Status"
+COL_ANOMALY = "Anomaly_Flag"
+COL_ID = "Supplier_ID"
+COL_SPEND = "Spend"
+COL_NOTES = "Notes"
 
 REQUIRED_COLS = [
-    COL_SUPPLIER, COL_COUNTRY, COL_CATEGORY,
-    COL_DELIVERY, COL_LEADTIME, COL_QUALITY,
-    COL_COMPLAINT, COL_PRICE_DEV,
+    COL_SUPPLIER,
+    COL_COUNTRY,
+    COL_CATEGORY,
+    COL_DELIVERY,
+    COL_LEADTIME,
+    COL_QUALITY,
+    COL_COMPLAINT,
+    COL_PRICE_DEV,
 ]
 
 # ─────────────────────────────────────────────────────────────────
 # GLOBAL CSS
 # ─────────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(
+    """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
 .stApp { background:#0d1117 !important; color:#e6edf3; }
 .block-container { padding: 16px 22px 24px 22px !important; max-width: 100% !important; }
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
+
+/* keep Streamlit sidebar reopen button visible */
+header[data-testid="stHeader"] {
+    visibility: visible !important;
+    background: transparent !important;
+    height: 2.8rem !important;
+}
+div[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 999999 !important;
+    cursor: pointer !important;
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 8px !important;
+}
+div[data-testid="collapsedControl"] * { cursor: pointer !important; }
 
 section[data-testid="stSidebar"] {
     background:#161b22 !important;
@@ -56,40 +82,69 @@ section[data-testid="stSidebar"] * { color:#c9d1d9 !important; }
 section[data-testid="stSidebar"] > div { padding: 14px 12px !important; }
 
 .logo-box {
-    font-size:1.05rem; font-weight:800; color:#e6edf3;
-    padding:8px 6px 16px 6px; border-bottom:1px solid #30363d; margin-bottom:14px;
+    font-size:1.05rem;
+    font-weight:800;
+    color:#e6edf3;
+    padding:8px 6px 16px 6px;
+    border-bottom:1px solid #30363d;
+    margin-bottom:14px;
 }
 .side-title {
-    font-size:0.70rem; letter-spacing:.08em; text-transform:uppercase;
-    color:#8b949e; font-weight:800; margin:16px 6px 6px 6px;
+    font-size:0.70rem;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:#8b949e !important;
+    font-weight:800;
+    margin:16px 6px 6px 6px;
 }
 
-/* Streamlit radio styled like sidebar nav */
+/* sidebar navigation */
 div[role="radiogroup"] label {
     background:transparent !important;
     border-radius:8px !important;
     padding:8px 10px !important;
     margin:2px 0 !important;
+    cursor:pointer !important;
 }
 div[role="radiogroup"] label:hover { background:#21262d !important; }
 div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child { display:none !important; }
 div[role="radiogroup"] label p { font-size:0.86rem !important; font-weight:650 !important; }
+div[role="radiogroup"] * { cursor:pointer !important; }
 
 .top-bar {
-    background:#161b22; border:1px solid #30363d; border-radius:12px;
-    padding:16px 18px; margin-bottom:14px;
-    display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;
+    background:#161b22;
+    border:1px solid #30363d;
+    border-radius:12px;
+    padding:16px 18px;
+    margin-bottom:14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
 }
 .top-title { font-size:1.35rem; font-weight:850; color:#e6edf3; }
 .top-sub { font-size:0.82rem; color:#8b949e; margin-top:2px; }
 
 .kpi-card {
-    background:#161b22; border:1px solid #30363d; border-radius:12px;
-    padding:16px 18px; display:flex; align-items:center; gap:14px; min-height:94px;
+    background:#161b22;
+    border:1px solid #30363d;
+    border-radius:12px;
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    min-height:94px;
 }
 .kpi-icon {
-    width:44px; height:44px; border-radius:12px; display:flex;
-    align-items:center; justify-content:center; font-size:1.15rem; flex-shrink:0;
+    width:44px;
+    height:44px;
+    border-radius:12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:1.15rem;
+    flex-shrink:0;
 }
 .kpi-label { font-size:0.76rem; color:#8b949e; font-weight:650; }
 .kpi-value { font-size:1.55rem; font-weight:850; color:#e6edf3; line-height:1.15; }
@@ -98,44 +153,165 @@ div[role="radiogroup"] label p { font-size:0.86rem !important; font-weight:650 !
 .kpi-muted { font-size:0.72rem; color:#6e7681; }
 
 .s-card {
-    background:#161b22; border:1px solid #30363d; border-radius:12px;
-    padding:16px 18px; height:100%; overflow:hidden;
+    background:#161b22;
+    border:1px solid #30363d;
+    border-radius:12px;
+    padding:16px 18px;
+    height:100%;
+    overflow:hidden;
 }
 .s-card-title { font-size:0.96rem; font-weight:850; color:#e6edf3; margin-bottom:12px; }
 
-.metric-grid { display:grid; grid-template-columns:repeat(6, minmax(150px,1fr)); gap:10px; margin-bottom:12px; }
+.metric-grid {
+    display:grid;
+    grid-template-columns:repeat(6, minmax(150px,1fr));
+    gap:10px;
+    margin-bottom:12px;
+}
 @media (max-width: 1400px) { .metric-grid { grid-template-columns:repeat(3, 1fr); } }
 @media (max-width: 900px) { .metric-grid { grid-template-columns:repeat(1, 1fr); } }
 
-.status-active { background:rgba(63,185,80,.12); color:#3fb950; border:1px solid rgba(63,185,80,.35); padding:3px 9px; border-radius:16px; font-size:.72rem; font-weight:800; }
-.status-risk { background:rgba(210,153,34,.12); color:#d29922; border:1px solid rgba(210,153,34,.35); padding:3px 9px; border-radius:16px; font-size:.72rem; font-weight:800; }
-.status-high { background:rgba(248,81,73,.12); color:#f85149; border:1px solid rgba(248,81,73,.35); padding:3px 9px; border-radius:16px; font-size:.72rem; font-weight:800; }
+.status-active {
+    background:rgba(63,185,80,.12);
+    color:#3fb950;
+    border:1px solid rgba(63,185,80,.35);
+    padding:3px 9px;
+    border-radius:16px;
+    font-size:.72rem;
+    font-weight:800;
+}
+.status-risk {
+    background:rgba(210,153,34,.12);
+    color:#d29922;
+    border:1px solid rgba(210,153,34,.35);
+    padding:3px 9px;
+    border-radius:16px;
+    font-size:.72rem;
+    font-weight:800;
+}
+.status-high {
+    background:rgba(248,81,73,.12);
+    color:#f85149;
+    border:1px solid rgba(248,81,73,.35);
+    padding:3px 9px;
+    border-radius:16px;
+    font-size:.72rem;
+    font-weight:800;
+}
 
 .alert-row { border-bottom:1px solid #21262d; padding:10px 0; }
 .alert-row:last-child { border-bottom:none; }
 .alert-name { font-size:.86rem; font-weight:800; color:#e6edf3; }
 .alert-desc { font-size:.76rem; color:#8b949e; margin-top:2px; }
-.alert-badge-high { background:rgba(248,81,73,.12); color:#f85149; border:1px solid rgba(248,81,73,.35); padding:2px 7px; border-radius:12px; font-size:.68rem; font-weight:850; }
-.alert-badge-med { background:rgba(210,153,34,.12); color:#d29922; border:1px solid rgba(210,153,34,.35); padding:2px 7px; border-radius:12px; font-size:.68rem; font-weight:850; }
+.alert-badge-high {
+    background:rgba(248,81,73,.12);
+    color:#f85149;
+    border:1px solid rgba(248,81,73,.35);
+    padding:2px 7px;
+    border-radius:12px;
+    font-size:.68rem;
+    font-weight:850;
+}
+.alert-badge-med {
+    background:rgba(210,153,34,.12);
+    color:#d29922;
+    border:1px solid rgba(210,153,34,.35);
+    padding:2px 7px;
+    border-radius:12px;
+    font-size:.68rem;
+    font-weight:850;
+}
 
 .profile-avatar {
-    width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg,#1f6feb,#58a6ff);
-    display:flex; align-items:center; justify-content:center; color:white; font-weight:900;
+    width:48px;
+    height:48px;
+    border-radius:14px;
+    background:linear-gradient(135deg,#1f6feb,#58a6ff);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-weight:900;
 }
 
+/* dropdown cursor fix */
+.stSelectbox, .stSelectbox *, div[data-baseweb="select"], div[data-baseweb="select"] * {
+    cursor: pointer !important;
+}
+div[data-baseweb="select"] input,
+input[aria-autocomplete="list"] {
+    cursor: pointer !important;
+    caret-color: transparent !important;
+    user-select: none !important;
+}
+.stTextInput input, .stTextInput input * {
+    cursor: text !important;
+    caret-color: auto !important;
+    user-select: text !important;
+}
 .stSelectbox label, .stTextInput label, .stFileUploader label, .stRadio label {
-    color:#8b949e !important; font-size:0.78rem !important; font-weight:700 !important;
+    color:#8b949e !important;
+    font-size:0.78rem !important;
+    font-weight:700 !important;
 }
 div[data-baseweb="select"] > div, .stTextInput input {
-    background:#21262d !important; border:1px solid #30363d !important; color:#e6edf3 !important; border-radius:9px !important;
+    background:#21262d !important;
+    border:1px solid #30363d !important;
+    color:#e6edf3 !important;
+    border-radius:9px !important;
 }
 .stButton > button {
-    background:#1f3a5f !important; border:1px solid #388bfd !important; color:#58a6ff !important;
-    border-radius:9px !important; font-weight:800 !important;
+    background:#1f3a5f !important;
+    border:1px solid #388bfd !important;
+    color:#58a6ff !important;
+    border-radius:9px !important;
+    font-weight:800 !important;
 }
 .stDataFrame { border-radius:10px !important; overflow:hidden !important; }
+
+/* custom Top Suppliers table */
+.supplier-table-wrap {
+    width:100%;
+    overflow-x:auto;
+    border:1px solid #30363d;
+    border-radius:10px;
+    background:#0d1117;
+}
+.supplier-table {
+    width:100%;
+    border-collapse:collapse;
+    min-width:1180px;
+    font-size:0.84rem;
+}
+.supplier-table thead th {
+    text-align:left;
+    padding:11px 10px;
+    background:#171b23;
+    color:#8b949e;
+    font-weight:850;
+    border-bottom:1px solid #30363d;
+    white-space:nowrap;
+}
+.supplier-table tbody td {
+    padding:10px 10px;
+    border-bottom:1px solid #21262d;
+    color:#e6edf3;
+    vertical-align:middle;
+    white-space:nowrap;
+}
+.supplier-table tbody tr:hover { background:#111820; }
+.supplier-name { font-weight:850; color:#e6edf3; }
+.metric-cell { display:flex; align-items:center; gap:10px; min-width:155px; }
+.mini-bar-bg { width:90px; height:8px; background:#30363d; border-radius:20px; overflow:hidden; }
+.mini-bar { height:8px; border-radius:20px; }
+.spark-wrap svg { display:block; }
+.price-up { color:#f85149; font-weight:900; }
+.price-down { color:#3fb950; font-weight:900; }
+.score-pill { font-weight:900; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ─────────────────────────────────────────────────────────────────
 # HELPERS
@@ -210,6 +386,91 @@ def score_color(score: float) -> str:
     return "#f85149"
 
 
+def country_flag(country: str) -> str:
+    flags = {
+        "austria": "🇦🇹",
+        "china": "🇨🇳",
+        "czech republic": "🇨🇿",
+        "czechia": "🇨🇿",
+        "france": "🇫🇷",
+        "germany": "🇩🇪",
+        "india": "🇮🇳",
+        "italy": "🇮🇹",
+        "mexico": "🇲🇽",
+        "netherlands": "🇳🇱",
+        "poland": "🇵🇱",
+        "spain": "🇪🇸",
+        "turkey": "🇹🇷",
+        "usa": "🇺🇸",
+        "united states": "🇺🇸",
+        "united states of america": "🇺🇸",
+        "uk": "🇬🇧",
+        "united kingdom": "🇬🇧",
+        "vietnam": "🇻🇳",
+    }
+    text = str(country).strip()
+    return flags.get(text.lower(), "🏳️")
+
+
+def country_with_flag(country: str) -> str:
+    text = str(country).strip()
+    return f"{country_flag(text)} {text}"
+
+
+def price_dev_html(value: float) -> str:
+    if pd.isna(value):
+        return "—"
+    if value > 0:
+        return f'<span class="price-up">▲ +{value:.2f}%</span>'
+    if value < 0:
+        return f'<span class="price-down">▼ {value:.2f}%</span>'
+    return '<span class="price-down">● 0.00%</span>'
+
+
+def metric_bar(value: float, target: float) -> str:
+    if pd.isna(value):
+        return "—"
+    width = max(0, min(float(value), 100))
+    good = value >= target
+    color = "#3fb950" if good else "#f85149"
+    return f"""
+    <div class="metric-cell">
+      <div class="mini-bar-bg"><div class="mini-bar" style="width:{width:.1f}%;background:{color};"></div></div>
+      <span style="font-weight:850;">{value:.1f}%</span>
+    </div>
+    """
+
+
+def stable_trend(base_value: float, name: str, points: int = 12, spread: float = 3.0) -> list[float]:
+    seed_text = str(name).encode("utf-8")
+    seed = int(hashlib.md5(seed_text).hexdigest()[:8], 16)
+    rng = np.random.default_rng(seed)
+    steps = rng.normal(0, spread / 4, points).cumsum()
+    centered = steps - steps.mean()
+    trend = np.clip(float(base_value) + centered, 0, 100)
+    return [round(float(v), 1) for v in trend]
+
+
+def sparkline_svg(values: list[float], color: str = "#3fb950", width: int = 112, height: int = 30) -> str:
+    if len(values) < 2:
+        return ""
+    lo = min(values)
+    hi = max(values)
+    rng = hi - lo if hi != lo else 1
+    pts = []
+    for i, value in enumerate(values):
+        x = i / (len(values) - 1) * width
+        y = height - ((value - lo) / rng) * (height - 6) - 3
+        pts.append(f"{x:.1f},{y:.1f}")
+    return f"""
+    <span class="spark-wrap">
+      <svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">
+        <polyline points="{' '.join(pts)}" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </span>
+    """
+
+
 def plotly_theme(height: int = 280) -> dict:
     return {
         "height": height,
@@ -244,27 +505,33 @@ def load_excel(uploaded_file) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────
-# SIDEBAR — NOW REAL INTERACTIVE NAVIGATION
+# SIDEBAR
 # ─────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div class="logo-box">📦 SupplierDash</div>', unsafe_allow_html=True)
+
     st.markdown('<div class="side-title">Monitoring</div>', unsafe_allow_html=True)
     page_monitor = ["🏠 Overview", "👥 Suppliers", "📈 Performance", "⚠️ Anomalies", "🔔 Alerts", "🏅 Scorecards"]
+
     st.markdown('<div class="side-title">Analytics</div>', unsafe_allow_html=True)
     page_analytics = ["💰 Spend Analysis", "📂 Category Insights", "🌍 Country Insights", "📊 Trends"]
+
     st.markdown('<div class="side-title">Management</div>', unsafe_allow_html=True)
     page_manage = ["📄 Contracts", "✅ Assessments", "📁 Documents"]
+
     st.markdown('<div class="side-title">Configuration</div>', unsafe_allow_html=True)
     page_config = ["⚙️ Settings", "👤 Users & Roles"]
 
     all_pages = page_monitor + page_analytics + page_manage + page_config
     page = st.radio("Navigation", all_pages, index=0, label_visibility="collapsed", key="page_nav")
 
+
 # ─────────────────────────────────────────────────────────────────
 # HEADER + UPLOAD
 # ─────────────────────────────────────────────────────────────────
 now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
-st.markdown(f"""
+st.markdown(
+    f"""
 <div class="top-bar">
   <div>
     <div class="top-title">Supplier Performance Dashboard</div>
@@ -272,16 +539,19 @@ st.markdown(f"""
   </div>
   <div style="font-size:.78rem;color:#8b949e;">🕐 {now_str}</div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 upload_col, note_col = st.columns([1.5, 4.5])
 with upload_col:
     uploaded_file = st.file_uploader("Upload supplier Excel", type=["xlsx", "xls"], label_visibility="collapsed")
 with note_col:
-    st.caption("Upload your supplier KPI Excel file. The dashboard will update automatically when you change filters or select a supplier.")
+    st.caption("Upload your supplier KPI Excel file. The dashboard updates automatically when filters or selected supplier change.")
 
 if uploaded_file is None:
-    st.markdown("""
+    st.markdown(
+        """
     <div class="s-card" style="max-width:620px;margin:55px auto;text-align:center;">
       <div style="font-size:3rem;margin-bottom:12px;">📂</div>
       <div style="font-size:1.2rem;font-weight:850;color:#e6edf3;margin-bottom:8px;">Upload your supplier data</div>
@@ -291,8 +561,11 @@ if uploaded_file is None:
         Optional columns: Supplier_ID, Status, Anomaly_Flag, Overall_Score, Spend, Notes.
       </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     st.stop()
+
 
 # ─────────────────────────────────────────────────────────────────
 # LOAD, MAP, VALIDATE
@@ -318,10 +591,13 @@ AUTO_MAP = {
 
 col_map = {internal: find_col(raw, candidates) for internal, candidates in AUTO_MAP.items()}
 missing = [col for col in REQUIRED_COLS if col_map.get(col) is None]
+
 if missing:
     st.error(
-        "Required columns were not found. Missing: " + ", ".join(missing) +
-        "\n\nColumns found in your file: " + ", ".join([str(c) for c in raw.columns])
+        "Required columns were not found. Missing: "
+        + ", ".join(missing)
+        + "\n\nColumns found in your file: "
+        + ", ".join([str(c) for c in raw.columns])
     )
     st.stop()
 
@@ -349,15 +625,18 @@ if COL_SPEND not in df.columns:
 df["_risk"] = df[COL_SCORE].apply(risk_label)
 
 if COL_STATUS not in df.columns:
-    df[COL_STATUS] = df["_risk"].map({"Low": "Active", "Medium": "At Risk", "High": "High Risk"})
+    df[COL_STATUS] = df["_risk"].map({"Low": "Green / Good", "Medium": "Yellow / Monitor", "High": "Red / High Risk"})
 else:
-    df[COL_STATUS] = df[COL_STATUS].fillna(df["_risk"].map({"Low": "Active", "Medium": "At Risk", "High": "High Risk"}))
+    df[COL_STATUS] = df[COL_STATUS].fillna(
+        df["_risk"].map({"Low": "Green / Good", "Medium": "Yellow / Monitor", "High": "Red / High Risk"})
+    )
 
 if COL_ANOMALY in df.columns:
     def normalize_anomaly(value) -> int:
         if pd.isna(value):
             return 0
         return 1 if str(value).strip().lower() in {"yes", "ja", "y", "true", "1", "critical", "kritisch"} else 0
+
     df["_anomaly"] = df[COL_ANOMALY].apply(normalize_anomaly)
 else:
     def count_anomalies(row: pd.Series) -> int:
@@ -368,6 +647,7 @@ else:
         count += int(pd.notna(row[COL_COMPLAINT]) and row[COL_COMPLAINT] > 1.0)
         count += int(pd.notna(row[COL_PRICE_DEV]) and abs(row[COL_PRICE_DEV]) > 1.0)
         return count
+
     df["_anomaly"] = df.apply(count_anomalies, axis=1)
 
 agg_dict = {
@@ -385,6 +665,7 @@ agg_dict = {
     "Status": (COL_STATUS, "first"),
     "Risk": ("_risk", "first"),
 }
+
 if COL_NOTES in df.columns:
     agg_dict["Notes"] = (COL_NOTES, "first")
 
@@ -399,37 +680,49 @@ for col in ["Delivery", "LeadTime", "Quality", "Complaint", "PriceDev", "Score",
     if col in agg.columns:
         agg[col] = pd.to_numeric(agg[col], errors="coerce").round(2)
 
+
 # ─────────────────────────────────────────────────────────────────
-# FILTERS — INTERACTIVE
+# FILTERS
 # ─────────────────────────────────────────────────────────────────
 f1, f2, f3, f4, f5 = st.columns([1.4, 1.4, 1.3, 1.3, 2.0])
+
 with f1:
     country_options = ["All Countries"] + sorted(agg["Country"].dropna().astype(str).unique().tolist())
     sel_country = st.selectbox("Country", country_options, key="filter_country")
+
 with f2:
     category_options = ["All Categories"] + sorted(agg["Category"].dropna().astype(str).unique().tolist())
     sel_category = st.selectbox("Category", category_options, key="filter_category")
+
 with f3:
     status_options = ["All Statuses"] + sorted(agg["Status"].dropna().astype(str).unique().tolist())
     sel_status = st.selectbox("Supplier Status", status_options, key="filter_status")
+
 with f4:
     risk_options = ["All Risk Levels", "Low", "Medium", "High"]
     sel_risk = st.selectbox("Risk Level", risk_options, key="filter_risk")
+
 with f5:
     search_q = st.text_input("🔍 Search suppliers...", placeholder="Search suppliers...", key="filter_search")
 
 filt = agg.copy()
+
 if sel_country != "All Countries":
     filt = filt[filt["Country"].astype(str) == sel_country]
+
 if sel_category != "All Categories":
     filt = filt[filt["Category"].astype(str) == sel_category]
+
 if sel_status != "All Statuses":
     filt = filt[filt["Status"].astype(str) == sel_status]
+
 if sel_risk != "All Risk Levels":
     filt = filt[filt["Risk"] == sel_risk]
+
 if search_q.strip():
     query = search_q.strip().lower()
     filt = filt[filt[COL_SUPPLIER].astype(str).str.lower().str.contains(query, na=False)]
+
 filt = filt.reset_index(drop=True)
 
 if filt.empty:
@@ -437,8 +730,10 @@ if filt.empty:
     st.stop()
 
 supplier_names = filt[COL_SUPPLIER].astype(str).tolist()
+
 if "selected_supplier" not in st.session_state or st.session_state["selected_supplier"] not in supplier_names:
     st.session_state["selected_supplier"] = supplier_names[0]
+
 
 # ─────────────────────────────────────────────────────────────────
 # KPI CARDS
@@ -451,18 +746,67 @@ active_suppliers = len(filt)
 anomaly_alerts = int(filt["Anomalies"].sum())
 spend_total = filt["Spend"].sum(skipna=True) if filt["Spend"].notna().any() else np.nan
 
-spend_text = f"€{spend_total:,.0f}" if pd.notna(spend_total) and spend_total > 0 else "N/A"
-
-st.markdown(f"""
+st.markdown(
+    f"""
 <div class="metric-grid">
-  <div class="kpi-card"><div class="kpi-icon" style="background:rgba(56,139,253,.12);">🚚</div><div><div class="kpi-label">On-Time Delivery %</div><div class="kpi-value">{avg_delivery:.1f}%</div><div class="{'kpi-good' if avg_delivery >= 95 else 'kpi-bad'}">{'▲ meets' if avg_delivery >= 95 else '▼ below'} 95% target</div></div></div>
-  <div class="kpi-card"><div class="kpi-icon" style="background:rgba(163,113,247,.12);">⏱️</div><div><div class="kpi-label">Avg Lead Time</div><div class="kpi-value">{avg_lead:.1f}d</div><div class="{'kpi-good' if avg_lead <= 10 else 'kpi-bad'}">{'▼ within' if avg_lead <= 10 else '▲ above'} 10d target</div></div></div>
-  <div class="kpi-card"><div class="kpi-icon" style="background:rgba(63,185,80,.12);">🛡️</div><div><div class="kpi-label">Quality Score</div><div class="kpi-value">{avg_quality:.1f}%</div><div class="{'kpi-good' if avg_quality >= 97 else 'kpi-bad'}">{'▲ meets' if avg_quality >= 97 else '▼ below'} 97% target</div></div></div>
-  <div class="kpi-card"><div class="kpi-icon" style="background:rgba(248,81,73,.12);">⚠️</div><div><div class="kpi-label">Complaint Rate</div><div class="kpi-value">{avg_complaint:.2f}%</div><div class="{'kpi-good' if avg_complaint <= 1 else 'kpi-bad'}">{'▼ within' if avg_complaint <= 1 else '▲ above'} 1% limit</div></div></div>
-  <div class="kpi-card"><div class="kpi-icon" style="background:rgba(56,139,253,.12);">👥</div><div><div class="kpi-label">Active Suppliers</div><div class="kpi-value">{active_suppliers}</div><div class="kpi-muted">in current filter</div></div></div>
-  <div class="kpi-card"><div class="kpi-icon" style="background:rgba(210,153,34,.12);">🔔</div><div><div class="kpi-label">Anomaly Alerts</div><div class="kpi-value">{anomaly_alerts}</div><div class="{'kpi-bad' if anomaly_alerts > 0 else 'kpi-good'}">{'requires attention' if anomaly_alerts > 0 else 'all clear'}</div></div></div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:rgba(56,139,253,.12);">🚚</div>
+    <div>
+      <div class="kpi-label">On-Time Delivery %</div>
+      <div class="kpi-value">{avg_delivery:.1f}%</div>
+      <div class="{'kpi-good' if avg_delivery >= 95 else 'kpi-bad'}">{'▲ meets' if avg_delivery >= 95 else '▼ below'} 95% target</div>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:rgba(163,113,247,.12);">⏱️</div>
+    <div>
+      <div class="kpi-label">Avg Lead Time</div>
+      <div class="kpi-value">{avg_lead:.1f}d</div>
+      <div class="{'kpi-good' if avg_lead <= 10 else 'kpi-bad'}">{'▼ within' if avg_lead <= 10 else '▲ above'} 10d target</div>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:rgba(63,185,80,.12);">🛡️</div>
+    <div>
+      <div class="kpi-label">Quality Score</div>
+      <div class="kpi-value">{avg_quality:.1f}%</div>
+      <div class="{'kpi-good' if avg_quality >= 97 else 'kpi-bad'}">{'▲ meets' if avg_quality >= 97 else '▼ below'} 97% target</div>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:rgba(248,81,73,.12);">⚠️</div>
+    <div>
+      <div class="kpi-label">Complaint Rate</div>
+      <div class="kpi-value">{avg_complaint:.2f}%</div>
+      <div class="{'kpi-good' if avg_complaint <= 1 else 'kpi-bad'}">{'▼ within' if avg_complaint <= 1 else '▲ above'} 1% limit</div>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:rgba(56,139,253,.12);">👥</div>
+    <div>
+      <div class="kpi-label">Active Suppliers</div>
+      <div class="kpi-value">{active_suppliers}</div>
+      <div class="kpi-muted">in current filter</div>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:rgba(210,153,34,.12);">🔔</div>
+    <div>
+      <div class="kpi-label">Anomaly Alerts</div>
+      <div class="kpi-value">{anomaly_alerts}</div>
+      <div class="{'kpi-bad' if anomaly_alerts > 0 else 'kpi-good'}">{'requires attention' if anomaly_alerts > 0 else 'all clear'}</div>
+    </div>
+  </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
+
 
 # ─────────────────────────────────────────────────────────────────
 # SHARED COMPONENTS
@@ -471,7 +815,9 @@ def render_supplier_selector() -> pd.Series:
     selected = st.selectbox(
         "Click to view supplier profile →",
         supplier_names,
-        index=supplier_names.index(st.session_state["selected_supplier"]) if st.session_state["selected_supplier"] in supplier_names else 0,
+        index=supplier_names.index(st.session_state["selected_supplier"])
+        if st.session_state["selected_supplier"] in supplier_names
+        else 0,
         key="selected_supplier",
     )
     return filt[filt[COL_SUPPLIER].astype(str) == selected].iloc[0]
@@ -479,174 +825,331 @@ def render_supplier_selector() -> pd.Series:
 
 def render_supplier_profile(row: pd.Series) -> None:
     color = score_color(float(row["Score"]))
-    st.markdown(f"""
+    price_class = "#f85149" if row["PriceDev"] > 0 else "#3fb950"
+
+    st.markdown(
+        f"""
     <div class="s-card">
       <div class="s-card-title">Selected Supplier</div>
+
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;">
         <div class="profile-avatar">{initials(row[COL_SUPPLIER])}</div>
         <div>
           <div style="font-weight:850;font-size:1rem;color:#e6edf3;">{row[COL_SUPPLIER]}</div>
-          <div style="font-size:.78rem;color:#8b949e;">{row['Category']} · {row['Country']}</div>
+          <div style="font-size:.78rem;color:#8b949e;">{row['Category']} · {country_with_flag(row['Country'])}</div>
           <div style="margin-top:5px;">{status_html(row['Status'])}</div>
         </div>
       </div>
+
       <div style="font-size:.75rem;color:#8b949e;">Overall Score</div>
-      <div style="font-size:2.15rem;font-weight:900;color:{color};">{row['Score']:.0f}<span style="font-size:1rem;color:#8b949e;">/100</span></div>
+      <div style="font-size:2.15rem;font-weight:900;color:{color};">
+        {row['Score']:.0f}<span style="font-size:1rem;color:#8b949e;">/100</span>
+      </div>
+
       <div style="height:8px;background:#21262d;border-radius:8px;overflow:hidden;margin:6px 0 16px 0;">
         <div style="height:8px;width:{max(min(float(row['Score']), 100), 0)}%;background:{color};"></div>
       </div>
+
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
         <div><div class="kpi-label">Delivery</div><div style="font-weight:850;color:{'#3fb950' if row['Delivery'] >= 95 else '#f85149'};">{row['Delivery']:.1f}%</div></div>
         <div><div class="kpi-label">Quality</div><div style="font-weight:850;color:{'#3fb950' if row['Quality'] >= 97 else '#f85149'};">{row['Quality']:.1f}%</div></div>
         <div><div class="kpi-label">Lead Time</div><div style="font-weight:850;color:{'#3fb950' if row['LeadTime'] <= 10 else '#f85149'};">{row['LeadTime']:.1f}d</div></div>
         <div><div class="kpi-label">Complaints</div><div style="font-weight:850;color:{'#3fb950' if row['Complaint'] <= 1 else '#f85149'};">{row['Complaint']:.2f}%</div></div>
-        <div><div class="kpi-label">Price Dev</div><div style="font-weight:850;color:{'#3fb950' if abs(row['PriceDev']) <= 1 else '#f85149'};">{row['PriceDev']:+.2f}%</div></div>
+        <div><div class="kpi-label">Price Dev</div><div style="font-weight:850;color:{price_class};">{row['PriceDev']:+.2f}%</div></div>
         <div><div class="kpi-label">Anomalies</div><div style="font-weight:850;color:#e6edf3;">{int(row['Anomalies'])}</div></div>
       </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_top_table(data: pd.DataFrame, rows: int = 12) -> None:
-    table_df = data[[COL_SUPPLIER, "Category", "Country", "Delivery", "Quality", "LeadTime", "Complaint", "PriceDev", "Status", "Risk", "Score"]].copy()
+    table_df = data[
+        [
+            COL_SUPPLIER,
+            "Category",
+            "Country",
+            "Delivery",
+            "Quality",
+            "LeadTime",
+            "Complaint",
+            "PriceDev",
+            "Status",
+            "Risk",
+            "Score",
+        ]
+    ].copy()
+
     table_df = table_df.sort_values("Score", ascending=False).head(rows)
-    table_df.columns = ["Supplier", "Category", "Country", "Delivery %", "Quality %", "Lead Time", "Complaint %", "Price Dev %", "Status", "Risk", "Score"]
-    st.dataframe(
-        table_df,
-        use_container_width=True,
-        hide_index=True,
-        height=min(440, 40 + 35 * len(table_df)),
-        column_config={
-            "Delivery %": st.column_config.ProgressColumn("Delivery %", min_value=0, max_value=100, format="%.1f%%"),
-            "Quality %": st.column_config.ProgressColumn("Quality %", min_value=0, max_value=100, format="%.1f%%"),
-            "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
-            "Lead Time": st.column_config.NumberColumn("Lead Time", format="%.1f d"),
-            "Complaint %": st.column_config.NumberColumn("Complaint %", format="%.2f%%"),
-            "Price Dev %": st.column_config.NumberColumn("Price Dev %", format="%+.2f%%"),
-        },
-    )
+
+    html_rows = []
+
+    for _, row in table_df.iterrows():
+        delivery_color = "#3fb950" if row["Delivery"] >= 95 else "#f85149"
+        quality_color = "#3fb950" if row["Quality"] >= 97 else "#f85149"
+        score_col = score_color(float(row["Score"]))
+        trend_values = stable_trend(row["Delivery"], row[COL_SUPPLIER])
+
+        html_rows.append(
+            f"""
+            <tr>
+              <td class="supplier-name">{row[COL_SUPPLIER]}</td>
+              <td>{row['Category']}</td>
+              <td>{country_with_flag(row['Country'])}</td>
+              <td>{metric_bar(row['Delivery'], 95)}</td>
+              <td>{sparkline_svg(trend_values, delivery_color)}</td>
+              <td>{metric_bar(row['Quality'], 97)}</td>
+              <td style="text-align:right;font-weight:800;">{row['LeadTime']:.1f} d</td>
+              <td style="text-align:right;font-weight:800;">{row['Complaint']:.2f}%</td>
+              <td>{price_dev_html(row['PriceDev'])}</td>
+              <td>{status_html(row['Status'])}</td>
+              <td>{row['Risk']}</td>
+              <td><span class="score-pill" style="color:{score_col};">{row['Score']:.1f}</span></td>
+            </tr>
+            """
+        )
+
+    table_html = f"""
+    <div class="supplier-table-wrap">
+      <table class="supplier-table">
+        <thead>
+          <tr>
+            <th>Supplier</th>
+            <th>Category</th>
+            <th>Country</th>
+            <th>Delivery %</th>
+            <th>Delivery Trend</th>
+            <th>Quality %</th>
+            <th>Lead Time</th>
+            <th>Complaint %</th>
+            <th>Price Dev %</th>
+            <th>Status</th>
+            <th>Risk</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {''.join(html_rows)}
+        </tbody>
+      </table>
+    </div>
+    """
+
+    st.markdown(table_html, unsafe_allow_html=True)
 
 
 def render_overview() -> None:
     left, right = st.columns([3.1, 1.1])
+
     with left:
-        st.markdown('<div class="s-card"><div class="s-card-title">📈 Supplier Performance Trend — Delivery vs Quality</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="s-card"><div class="s-card-title">📈 Supplier Performance Trend — Delivery vs Quality</div>',
+            unsafe_allow_html=True,
+        )
+
         trend = filt.sort_values("Score", ascending=False).head(15)
+
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=trend[COL_SUPPLIER], y=trend["Delivery"], mode="lines+markers", name="On-Time Delivery %", line=dict(color="#388bfd", width=2)))
-        fig.add_trace(go.Scatter(x=trend[COL_SUPPLIER], y=trend["Quality"], mode="lines+markers", name="Quality Score %", line=dict(color="#3fb950", width=2)))
+        fig.add_trace(
+            go.Scatter(
+                x=trend[COL_SUPPLIER],
+                y=trend["Delivery"],
+                mode="lines+markers",
+                name="On-Time Delivery %",
+                line=dict(color="#388bfd", width=2),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=trend[COL_SUPPLIER],
+                y=trend["Quality"],
+                mode="lines+markers",
+                name="Quality Score %",
+                line=dict(color="#3fb950", width=2),
+            )
+        )
         fig.add_hline(y=95, line_dash="dash", line_color="rgba(56,139,253,.45)", annotation_text="95% target")
         fig.add_hline(y=97, line_dash="dash", line_color="rgba(63,185,80,.45)", annotation_text="97% target")
         fig.update_layout(**plotly_theme(300), xaxis_tickangle=-35)
+
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         c1, c2 = st.columns(2)
+
         with c1:
             st.markdown('<div class="s-card"><div class="s-card-title">📦 Score by Category</div>', unsafe_allow_html=True)
             cat = filt.groupby("Category", as_index=False)["Score"].mean().sort_values("Score")
-            fig = px.bar(cat, x="Score", y="Category", orientation="h", color="Score", color_continuous_scale="Blues", range_color=[50, 100])
+            fig = px.bar(
+                cat,
+                x="Score",
+                y="Category",
+                orientation="h",
+                color="Score",
+                color_continuous_scale="Blues",
+                range_color=[50, 100],
+            )
             fig.update_layout(**plotly_theme(260), coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
         with c2:
             st.markdown('<div class="s-card"><div class="s-card-title">🌍 Supplier Count by Country</div>', unsafe_allow_html=True)
             country = filt["Country"].value_counts().reset_index()
             country.columns = ["Country", "Count"]
+            country["Country"] = country["Country"].apply(country_with_flag)
             fig = px.pie(country.head(10), names="Country", values="Count", hole=0.55)
             fig.update_layout(**plotly_theme(260), showlegend=True)
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown('<div class="s-card"><div class="s-card-title">🏆 Top Suppliers</div>', unsafe_allow_html=True)
-        row = render_supplier_selector()
+        render_supplier_selector()
         render_top_table(filt)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
     with right:
-        row = filt[filt[COL_SUPPLIER].astype(str) == st.session_state["selected_supplier"]].iloc[0]
+        selected = filt[filt[COL_SUPPLIER].astype(str) == st.session_state["selected_supplier"]].iloc[0]
+
         st.markdown('<div class="s-card"><div class="s-card-title">⚠️ Anomaly Detection</div>', unsafe_allow_html=True)
+
         anomalies = filt[filt["Anomalies"] > 0].sort_values("Score").head(6)
+
         if anomalies.empty:
             st.success("No anomalies detected in current filters.")
         else:
             for _, a in anomalies.iterrows():
                 badge = "alert-badge-high" if a["Score"] < 75 else "alert-badge-med"
                 level = "High" if a["Score"] < 75 else "Medium"
-                st.markdown(f"""
+
+                st.markdown(
+                    f"""
                 <div class="alert-row">
                   <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
                     <span class="alert-name">{a[COL_SUPPLIER]}</span><span class="{badge}">{level}</span>
                   </div>
                   <div class="alert-desc">{issue_text(a)}</div>
-                  <div class="kpi-muted">{a['Category']} · {a['Country']}</div>
+                  <div class="kpi-muted">{a['Category']} · {country_with_flag(a['Country'])}</div>
                 </div>
-                """, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        render_supplier_profile(row)
+                """,
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+        render_supplier_profile(selected)
 
 
 def render_suppliers() -> None:
     left, right = st.columns([2.4, 1])
+
     with left:
         st.markdown('<div class="s-card"><div class="s-card-title">👥 Supplier Directory</div>', unsafe_allow_html=True)
         selected_row = render_supplier_selector()
         render_top_table(filt, rows=25)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
     with right:
         render_supplier_profile(selected_row)
 
 
 def render_performance() -> None:
     c1, c2 = st.columns(2)
+
     with c1:
         st.markdown('<div class="s-card"><div class="s-card-title">🎯 Delivery Reliability vs Quality Score</div>', unsafe_allow_html=True)
-        fig = px.scatter(filt, x="Delivery", y="Quality", size="Score", color="Risk", hover_name=COL_SUPPLIER, size_max=28, color_discrete_map={"Low": "#3fb950", "Medium": "#d29922", "High": "#f85149"})
+        fig = px.scatter(
+            filt,
+            x="Delivery",
+            y="Quality",
+            size="Score",
+            color="Risk",
+            hover_name=COL_SUPPLIER,
+            size_max=28,
+            color_discrete_map={"Low": "#3fb950", "Medium": "#d29922", "High": "#f85149"},
+        )
         fig.add_vline(x=95, line_dash="dash", line_color="rgba(255,255,255,.25)")
         fig.add_hline(y=97, line_dash="dash", line_color="rgba(255,255,255,.25)")
         fig.update_layout(**plotly_theme(380), xaxis_title="Delivery %", yaxis_title="Quality %")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
     with c2:
         st.markdown('<div class="s-card"><div class="s-card-title">⏱️ Lead Time vs Complaint Rate</div>', unsafe_allow_html=True)
-        fig = px.scatter(filt, x="LeadTime", y="Complaint", size="Score", color="Risk", hover_name=COL_SUPPLIER, size_max=28, color_discrete_map={"Low": "#3fb950", "Medium": "#d29922", "High": "#f85149"})
+        fig = px.scatter(
+            filt,
+            x="LeadTime",
+            y="Complaint",
+            size="Score",
+            color="Risk",
+            hover_name=COL_SUPPLIER,
+            size_max=28,
+            color_discrete_map={"Low": "#3fb950", "Medium": "#d29922", "High": "#f85149"},
+        )
         fig.add_vline(x=10, line_dash="dash", line_color="rgba(255,255,255,.25)")
         fig.add_hline(y=1, line_dash="dash", line_color="rgba(255,255,255,.25)")
         fig.update_layout(**plotly_theme(380), xaxis_title="Lead Time Days", yaxis_title="Complaint Rate %")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_anomalies() -> None:
     st.markdown('<div class="s-card"><div class="s-card-title">⚠️ Anomaly Management</div>', unsafe_allow_html=True)
+
     anomalies = filt[filt["Anomalies"] > 0].sort_values(["Risk", "Score"], ascending=[True, True]).copy()
+
     if anomalies.empty:
         st.success("No anomaly found in the current filter.")
     else:
         anomalies["Issue"] = anomalies.apply(issue_text, axis=1)
-        show = anomalies[[COL_SUPPLIER, "Category", "Country", "Delivery", "LeadTime", "Quality", "Complaint", "PriceDev", "Risk", "Score", "Issue"]]
+        show = anomalies[
+            [
+                COL_SUPPLIER,
+                "Category",
+                "Country",
+                "Delivery",
+                "LeadTime",
+                "Quality",
+                "Complaint",
+                "PriceDev",
+                "Risk",
+                "Score",
+                "Issue",
+            ]
+        ].copy()
+        show["Country"] = show["Country"].apply(country_with_flag)
+        show["PriceDev"] = show["PriceDev"].map(lambda x: f"{x:+.2f}%")
         st.dataframe(show, use_container_width=True, hide_index=True, height=460)
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_scorecards() -> None:
     st.markdown('<div class="s-card"><div class="s-card-title">🏅 Supplier Scorecards</div>', unsafe_allow_html=True)
-    scorecard = filt[[COL_SUPPLIER, "Delivery", "Quality", "LeadTime", "Complaint", "PriceDev", "Anomalies", "Risk", "Score"]].sort_values("Score", ascending=False)
-    st.dataframe(
-        scorecard,
-        use_container_width=True,
-        hide_index=True,
-        height=500,
-        column_config={
-            "Delivery": st.column_config.ProgressColumn("Delivery", min_value=0, max_value=100, format="%.1f%%"),
-            "Quality": st.column_config.ProgressColumn("Quality", min_value=0, max_value=100, format="%.1f%%"),
-            "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
-        },
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    scorecard = filt[
+        [
+            COL_SUPPLIER,
+            "Delivery",
+            "Quality",
+            "LeadTime",
+            "Complaint",
+            "PriceDev",
+            "Anomalies",
+            "Risk",
+            "Score",
+        ]
+    ].sort_values("Score", ascending=False).copy()
+
+    scorecard["PriceDev"] = scorecard["PriceDev"].map(lambda x: f"{x:+.2f}%")
+    st.dataframe(scorecard, use_container_width=True, hide_index=True, height=500)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_spend_analysis() -> None:
     st.markdown('<div class="s-card"><div class="s-card-title">💰 Spend Analysis</div>', unsafe_allow_html=True)
+
     if not filt["Spend"].notna().any() or filt["Spend"].sum() <= 0:
         st.info("No Spend column was found in your Excel file. Add a Spend / Annual_Spend / Total_Spend column to activate spend charts.")
         fallback = filt.groupby("Category", as_index=False)["Score"].mean().sort_values("Score", ascending=False)
@@ -654,47 +1157,91 @@ def render_spend_analysis() -> None:
     else:
         spend = filt.groupby("Category", as_index=False)["Spend"].sum().sort_values("Spend", ascending=False)
         fig = px.bar(spend, x="Category", y="Spend", color="Spend", color_continuous_scale="Blues")
+
     fig.update_layout(**plotly_theme(420))
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_category_insights() -> None:
     st.markdown('<div class="s-card"><div class="s-card-title">📂 Category Insights</div>', unsafe_allow_html=True)
-    category = filt.groupby("Category", as_index=False).agg(Suppliers=(COL_SUPPLIER, "count"), Avg_Score=("Score", "mean"), Avg_Delivery=("Delivery", "mean"), Avg_Quality=("Quality", "mean"), Avg_Lead_Time=("LeadTime", "mean"), Alerts=("Anomalies", "sum"))
+
+    category = filt.groupby("Category", as_index=False).agg(
+        Suppliers=(COL_SUPPLIER, "count"),
+        Avg_Score=("Score", "mean"),
+        Avg_Delivery=("Delivery", "mean"),
+        Avg_Quality=("Quality", "mean"),
+        Avg_Lead_Time=("LeadTime", "mean"),
+        Alerts=("Anomalies", "sum"),
+    )
+
     category = category.round(2).sort_values("Avg_Score", ascending=False)
     st.dataframe(category, use_container_width=True, hide_index=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_country_insights() -> None:
     c1, c2 = st.columns(2)
+
     with c1:
         st.markdown('<div class="s-card"><div class="s-card-title">🌍 Suppliers by Country</div>', unsafe_allow_html=True)
-        country = filt.groupby("Country", as_index=False).agg(Suppliers=(COL_SUPPLIER, "count"), Avg_Score=("Score", "mean"), Alerts=("Anomalies", "sum")).round(2).sort_values("Suppliers", ascending=False)
+
+        country = (
+            filt.groupby("Country", as_index=False)
+            .agg(
+                Suppliers=(COL_SUPPLIER, "count"),
+                Avg_Score=("Score", "mean"),
+                Alerts=("Anomalies", "sum"),
+            )
+            .round(2)
+            .sort_values("Suppliers", ascending=False)
+        )
+
+        country["Country"] = country["Country"].apply(country_with_flag)
         st.dataframe(country, use_container_width=True, hide_index=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
     with c2:
         st.markdown('<div class="s-card"><div class="s-card-title">🌍 Country Score Chart</div>', unsafe_allow_html=True)
+
         country = filt.groupby("Country", as_index=False)["Score"].mean().sort_values("Score", ascending=False)
+        country["Country"] = country["Country"].apply(country_with_flag)
+
         fig = px.bar(country, x="Country", y="Score", color="Score", color_continuous_scale="Blues", range_color=[50, 100])
         fig.update_layout(**plotly_theme(360), coloraxis_showscale=False)
+
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_trends() -> None:
     st.markdown('<div class="s-card"><div class="s-card-title">📊 KPI Trends / Ranking</div>', unsafe_allow_html=True)
+
     metric = st.selectbox("Choose KPI", ["Score", "Delivery", "Quality", "LeadTime", "Complaint", "PriceDev"], key="trend_metric")
+
     trend = filt.sort_values(metric, ascending=(metric in ["LeadTime", "Complaint", "PriceDev"])).head(20)
-    fig = px.line(trend, x=COL_SUPPLIER, y=metric, markers=True, hover_data=["Category", "Country", "Risk", "Score"])
+
+    fig = px.line(
+        trend,
+        x=COL_SUPPLIER,
+        y=metric,
+        markers=True,
+        hover_data=["Category", "Country", "Risk", "Score"],
+    )
     fig.update_layout(**plotly_theme(430), xaxis_tickangle=-35)
+
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_placeholder(title: str, text: str) -> None:
-    st.markdown(f'<div class="s-card"><div class="s-card-title">{title}</div><div style="color:#8b949e;line-height:1.6;">{text}</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="s-card"><div class="s-card-title">{title}</div><div style="color:#8b949e;line-height:1.6;">{text}</div></div>',
+        unsafe_allow_html=True,
+    )
+
 
 # ─────────────────────────────────────────────────────────────────
 # PAGE ROUTING
@@ -720,18 +1267,33 @@ elif page == "🌍 Country Insights":
 elif page == "📊 Trends":
     render_trends()
 elif page == "📄 Contracts":
-    render_placeholder("📄 Contracts", "This section is connected to supplier risk context. Add contract expiry, contract value, owner, and renewal date columns later to make this page fully data-driven.")
+    render_placeholder(
+        "📄 Contracts",
+        "This section is connected to supplier risk context. Add contract expiry, contract value, owner, and renewal date columns later to make this page fully data-driven.",
+    )
 elif page == "✅ Assessments":
     render_scorecards()
 elif page == "📁 Documents":
-    render_placeholder("📁 Documents", "Document management placeholder: supplier certificates, quality documents, compliance files, and audit reports can be connected here later.")
+    render_placeholder(
+        "📁 Documents",
+        "Document management placeholder: supplier certificates, quality documents, compliance files, and audit reports can be connected here later.",
+    )
 elif page == "⚙️ Settings":
-    render_placeholder("⚙️ Settings", "Settings placeholder: targets are currently fixed at Delivery ≥ 95%, Quality ≥ 97%, Lead Time ≤ 10 days, Complaint Rate ≤ 1%, and Price Deviation within ±1%.")
+    render_placeholder(
+        "⚙️ Settings",
+        "Settings placeholder: targets are currently fixed at Delivery ≥ 95%, Quality ≥ 97%, Lead Time ≤ 10 days, Complaint Rate ≤ 1%, and Price Deviation within ±1%.",
+    )
 elif page == "👤 Users & Roles":
-    render_placeholder("👤 Users & Roles", "Users & Roles placeholder: this demo app runs locally/Streamlit Cloud. Role-based permissions can be added later if the app is connected to authentication.")
+    render_placeholder(
+        "👤 Users & Roles",
+        "Users & Roles placeholder: this demo app runs locally/Streamlit Cloud. Role-based permissions can be added later if the app is connected to authentication.",
+    )
 
-st.markdown("""
+st.markdown(
+    """
 <div style="text-align:center;color:#6e7681;font-size:.75rem;padding:24px 0 8px;">
 SupplierDash · Interactive KPI Monitoring · Powered by Streamlit
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
