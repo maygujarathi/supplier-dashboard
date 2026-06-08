@@ -657,7 +657,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             "Delivery target (%)",
             50.0,
             100.0,
-            value=float(cfg_get("delivery_target")),
+            value=95.0,
             step=0.5,
             key="w_delivery_target",
         )
@@ -665,7 +665,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             "Quality target (%)",
             50.0,
             100.0,
-            value=float(cfg_get("quality_target")),
+            value=97.0,
             step=0.5,
             key="w_quality_target",
         )
@@ -673,7 +673,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             "Lead time limit (days)",
             1.0,
             60.0,
-            value=float(cfg_get("leadtime_limit")),
+            value=10.0,
             step=0.5,
             key="w_leadtime_limit",
         )
@@ -681,7 +681,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             "Complaint rate limit (%)",
             0.0,
             20.0,
-            value=float(cfg_get("complaint_limit")),
+            value=1.0,
             step=0.1,
             key="w_complaint_limit",
         )
@@ -689,7 +689,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             "Price deviation tolerance (+/- %)",
             0.0,
             25.0,
-            value=float(cfg_get("price_dev_tolerance")),
+            value=1.0,
             step=0.1,
             key="w_price_dev_tolerance",
         )
@@ -698,13 +698,11 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
         st.markdown("#### Anomaly & Display")
 
         sensitivity_options = ["Low", "Medium", "High"]
-        current_sensitivity = str(cfg_get("anomaly_sensitivity"))
-        sensitivity_index = sensitivity_options.index(current_sensitivity) if current_sensitivity in sensitivity_options else 1
 
         new_anomaly_sensitivity = st.selectbox(
             "Anomaly sensitivity",
             sensitivity_options,
-            index=sensitivity_index,
+            index=1,
             key="w_anomaly_sensitivity",
             help="Low = fewer alerts, Medium = normal rules, High = stricter alerts.",
         )
@@ -713,24 +711,37 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             "Top supplier table rows",
             5,
             50,
-            value=int(cfg_get("top_supplier_rows")),
+            value=14,
             step=1,
             key="w_top_supplier_rows",
         )
 
         new_show_country_flags = st.checkbox(
             "Show country flags",
-            value=bool(cfg_get("show_country_flags")),
+            value=True,
             key="w_show_country_flags",
         )
 
         new_show_delivery_trend = st.checkbox(
             "Show delivery trend line in Top Suppliers",
-            value=bool(cfg_get("show_delivery_trend")),
+            value=True,
             key="w_show_delivery_trend",
         )
 
-    # Write widget values back to cfg_ store AFTER widgets are rendered
+        st.markdown("#### Reset")
+        if st.button("Reset all settings to default"):
+            st.session_state["w_delivery_target"] = 95.0
+            st.session_state["w_quality_target"] = 97.0
+            st.session_state["w_leadtime_limit"] = 10.0
+            st.session_state["w_complaint_limit"] = 1.0
+            st.session_state["w_price_dev_tolerance"] = 1.0
+            st.session_state["w_anomaly_sensitivity"] = "Medium"
+            st.session_state["w_top_supplier_rows"] = 14
+            st.session_state["w_show_country_flags"] = True
+            st.session_state["w_show_delivery_trend"] = True
+            st.rerun()
+
+    # Update global cfg_ store from widget values
     cfg_set("delivery_target", new_delivery_target)
     cfg_set("quality_target", new_quality_target)
     cfg_set("leadtime_limit", new_leadtime_limit)
@@ -907,13 +918,6 @@ for numeric_col in ["Delivery", "LeadTime", "Quality", "Complaint", "PriceDev", 
 
 
 if page == "⚙️ Settings":
-    # Handle reset at module level BEFORE rendering settings
-    reset_pressed = st.button("↻ Reset all settings to default", key="module_reset_btn")
-    if reset_pressed:
-        for k, v in DEFAULT_SETTINGS.items():
-            st.session_state[cfg_key(k)] = v
-        st.rerun()
-    
     render_settings(raw_data=raw, clean_data=df)
     st.markdown(
         '<div style="text-align:center;color:#6e7681;font-size:.75rem;padding:24px 0 8px;">SupplierDash · Interactive KPI Monitoring · Powered by Streamlit</div>',
