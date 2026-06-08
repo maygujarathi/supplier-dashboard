@@ -57,9 +57,6 @@ DEFAULT_SETTINGS = {
 CFG_PREFIX = "cfg_"
 
 # ── Init session state ────────────────────────────────────────────────────────
-if "settings_version" not in st.session_state:
-    st.session_state["settings_version"] = 0
-
 for _k, _v in DEFAULT_SETTINGS.items():
     if f"{CFG_PREFIX}{_k}" not in st.session_state:
         st.session_state[f"{CFG_PREFIX}{_k}"] = _v
@@ -373,16 +370,10 @@ def cfg_set(setting_key: str, value) -> None:
 
 
 def reset_settings() -> None:
-    """Reset all settings to defaults. Increments version so widgets re-render with new defaults."""
+    """Reset all settings to defaults."""
     for setting_key, default_value in DEFAULT_SETTINGS.items():
-        # Store the default into a separate "pending reset" slot instead of the
-        # widget-bound key — the widget keys are auto-managed by Streamlit and
-        # cannot be written while the widget is rendered.  We bump the version
-        # counter; on the next run fresh widget keys are created that read from
-        # our cfg_ keys which we set here safely.
         st.session_state[cfg_key(setting_key)] = default_value
-    new_version = int(st.session_state.get("settings_version", 0)) + 1
-    st.session_state["settings_version"] = new_version
+    st.rerun()
 
 
 def get_rules() -> dict:
@@ -665,8 +656,6 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
     st.markdown('<div class="s-card"><div class="s-card-title">⚙️ Dashboard Settings</div>', unsafe_allow_html=True)
     st.caption("These settings control KPI cards, anomaly detection, risk scoring, profile colors, and supplier table display.")
 
-    # Version drives widget key uniqueness; after reset, widgets rebuild from cfg_ values
-    version = int(st.session_state.get("settings_version", 0))
     s1, s2 = st.columns(2)
 
     with s1:
@@ -677,7 +666,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             100.0,
             value=float(cfg_get("delivery_target")),
             step=0.5,
-            key=f"w_delivery_target_{version}",
+            key="w_delivery_target",
         )
         new_quality_target = st.slider(
             "Quality target (%)",
@@ -685,7 +674,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             100.0,
             value=float(cfg_get("quality_target")),
             step=0.5,
-            key=f"w_quality_target_{version}",
+            key="w_quality_target",
         )
         new_leadtime_limit = st.slider(
             "Lead time limit (days)",
@@ -693,7 +682,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             60.0,
             value=float(cfg_get("leadtime_limit")),
             step=0.5,
-            key=f"w_leadtime_limit_{version}",
+            key="w_leadtime_limit",
         )
         new_complaint_limit = st.slider(
             "Complaint rate limit (%)",
@@ -701,7 +690,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             20.0,
             value=float(cfg_get("complaint_limit")),
             step=0.1,
-            key=f"w_complaint_limit_{version}",
+            key="w_complaint_limit",
         )
         new_price_dev_tolerance = st.slider(
             "Price deviation tolerance (+/- %)",
@@ -709,7 +698,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             25.0,
             value=float(cfg_get("price_dev_tolerance")),
             step=0.1,
-            key=f"w_price_dev_tolerance_{version}",
+            key="w_price_dev_tolerance",
         )
 
     with s2:
@@ -723,7 +712,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             "Anomaly sensitivity",
             sensitivity_options,
             index=sensitivity_index,
-            key=f"w_anomaly_sensitivity_{version}",
+            key="w_anomaly_sensitivity",
             help="Low = fewer alerts, Medium = normal rules, High = stricter alerts.",
         )
 
@@ -733,23 +722,24 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             50,
             value=int(cfg_get("top_supplier_rows")),
             step=1,
-            key=f"w_top_supplier_rows_{version}",
+            key="w_top_supplier_rows",
         )
 
         new_show_country_flags = st.checkbox(
             "Show country flags",
             value=bool(cfg_get("show_country_flags")),
-            key=f"w_show_country_flags_{version}",
+            key="w_show_country_flags",
         )
 
         new_show_delivery_trend = st.checkbox(
             "Show delivery trend line in Top Suppliers",
             value=bool(cfg_get("show_delivery_trend")),
-            key=f"w_show_delivery_trend_{version}",
+            key="w_show_delivery_trend",
         )
 
         st.markdown("#### Reset")
-        st.button("Reset all settings to default", on_click=reset_settings)
+        if st.button("Reset all settings to default"):
+            reset_settings()
 
     # Write widget values back to cfg_ store AFTER widgets are rendered
     cfg_set("delivery_target", new_delivery_target)
