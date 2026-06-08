@@ -56,13 +56,13 @@ DEFAULT_SETTINGS = {
 
 CFG_PREFIX = "cfg_"
 
+# ── Init session state ────────────────────────────────────────────────────────
 if "settings_version" not in st.session_state:
     st.session_state["settings_version"] = 0
 
-for setting_key, default_value in DEFAULT_SETTINGS.items():
-    cfg_key = f"{CFG_PREFIX}{setting_key}"
-    if cfg_key not in st.session_state:
-        st.session_state[cfg_key] = default_value
+for _k, _v in DEFAULT_SETTINGS.items():
+    if f"{CFG_PREFIX}{_k}" not in st.session_state:
+        st.session_state[f"{CFG_PREFIX}{_k}"] = _v
 
 st.markdown(
     """
@@ -170,7 +170,6 @@ div[data-baseweb="select"] > div,
     border-radius: 9px !important;
 }
 
-/* light slider attempt */
 .stSlider div[data-baseweb="slider"] div { background-color: #30363d !important; }
 .stSlider div[data-baseweb="slider"] div[style*="width"] { background-color: #f0f6fc !important; }
 
@@ -215,13 +214,13 @@ div[data-baseweb="select"] > div,
 
 .metric-grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(145px, 1fr));
+    grid-template-columns: repeat(7, minmax(140px, 1fr));
     gap: 0.65rem;
     margin-bottom: 0.75rem;
 }
 
-@media (max-width: 1450px) {
-    .metric-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+@media (max-width: 1600px) {
+    .metric-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); }
 }
 
 @media (max-width: 900px) {
@@ -255,6 +254,17 @@ div[data-baseweb="select"] > div,
 .kpi-good { font-size: 0.74rem; color: #3fb950; font-weight: 850; }
 .kpi-bad { font-size: 0.74rem; color: #f85149; font-weight: 850; }
 .kpi-muted { font-size: 0.72rem; color: #6e7681; }
+
+.kpi-selected-name {
+    font-size: 0.68rem;
+    color: #58a6ff;
+    font-weight: 800;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
 
 .s-card {
     background: #161b22;
@@ -349,6 +359,7 @@ div[data-testid="stDataFrame"] {
 )
 
 
+# ── Config helpers ────────────────────────────────────────────────────────────
 def cfg_key(setting_key: str) -> str:
     return f"{CFG_PREFIX}{setting_key}"
 
@@ -362,9 +373,16 @@ def cfg_set(setting_key: str, value) -> None:
 
 
 def reset_settings() -> None:
+    """Reset all settings to defaults. Increments version so widgets re-render with new defaults."""
     for setting_key, default_value in DEFAULT_SETTINGS.items():
+        # Store the default into a separate "pending reset" slot instead of the
+        # widget-bound key — the widget keys are auto-managed by Streamlit and
+        # cannot be written while the widget is rendered.  We bump the version
+        # counter; on the next run fresh widget keys are created that read from
+        # our cfg_ keys which we set here safely.
         st.session_state[cfg_key(setting_key)] = default_value
-    st.session_state["settings_version"] = int(st.session_state.get("settings_version", 0)) + 1
+    new_version = int(st.session_state.get("settings_version", 0)) + 1
+    st.session_state["settings_version"] = new_version
 
 
 def get_rules() -> dict:
@@ -417,6 +435,7 @@ def get_effective_rules() -> dict:
     }
 
 
+# ── RULES is computed fresh every run (not module-level constant) ─────────────
 RULES = get_effective_rules()
 
 
@@ -646,6 +665,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
     st.markdown('<div class="s-card"><div class="s-card-title">⚙️ Dashboard Settings</div>', unsafe_allow_html=True)
     st.caption("These settings control KPI cards, anomaly detection, risk scoring, profile colors, and supplier table display.")
 
+    # Version drives widget key uniqueness; after reset, widgets rebuild from cfg_ values
     version = int(st.session_state.get("settings_version", 0))
     s1, s2 = st.columns(2)
 
@@ -731,6 +751,7 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
         st.markdown("#### Reset")
         st.button("Reset all settings to default", on_click=reset_settings)
 
+    # Write widget values back to cfg_ store AFTER widgets are rendered
     cfg_set("delivery_target", new_delivery_target)
     cfg_set("quality_target", new_quality_target)
     cfg_set("leadtime_limit", new_leadtime_limit)
@@ -965,6 +986,12 @@ supplier_names = filt[COL_SUPPLIER].astype(str).tolist()
 if "selected_supplier" not in st.session_state or st.session_state["selected_supplier"] not in supplier_names:
     st.session_state["selected_supplier"] = supplier_names[0]
 
+# ── Determine currently selected supplier for KPI bar ────────────────────────
+_current_selected = st.session_state.get("selected_supplier", supplier_names[0])
+if _current_selected not in supplier_names:
+    _current_selected = supplier_names[0]
+
+_sel_row = filt[filt[COL_SUPPLIER].astype(str) == _current_selected].iloc[0]
 
 avg_delivery = filt["Delivery"].mean()
 avg_lead = filt["LeadTime"].mean()
@@ -972,6 +999,11 @@ avg_quality = filt["Quality"].mean()
 avg_complaint = filt["Complaint"].mean()
 active_suppliers = len(filt)
 anomaly_alerts = int(filt["Anomalies"].sum())
+
+# Selected supplier KPIs for the last card
+_sel_score = float(_sel_row["Score"])
+_sel_color = score_color(_sel_score)
+_sel_name_short = str(_current_selected)[:18] + ("…" if len(str(_current_selected)) > 18 else "")
 
 st.markdown(
     f"""
@@ -1027,6 +1059,15 @@ st.markdown(
       <div class="kpi-label">Anomaly Alerts</div>
       <div class="kpi-value">{anomaly_alerts}</div>
       <div class="{'kpi-bad' if anomaly_alerts > 0 else 'kpi-good'}">{'requires attention' if anomaly_alerts > 0 else 'all clear'}</div>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-icon" style="background:rgba(88,166,255,.10);">🔍</div>
+    <div>
+      <div class="kpi-label">Selected Supplier</div>
+      <div class="kpi-value" style="font-size:1.1rem;color:{_sel_color};">{_sel_score:.0f}<span style="font-size:.85rem;color:#8b949e;">/100</span></div>
+      <div class="kpi-selected-name" title="{_current_selected}">{_sel_name_short}</div>
     </div>
   </div>
 </div>
@@ -1232,7 +1273,10 @@ def render_overview() -> None:
         )
         fig.add_hline(y=float(RULES["delivery_target"]), line_dash="dash", line_color="rgba(56,139,253,.45)", annotation_text="Delivery target")
         fig.add_hline(y=float(RULES["quality_target"]), line_dash="dash", line_color="rgba(63,185,80,.45)", annotation_text="Quality target")
-        fig.update_layout(**plotly_theme(300), xaxis_tickangle=-35)
+        theme = plotly_theme(300)
+        theme["xaxis"]["title"] = "Supplier"
+        theme["yaxis"]["title"] = "Score (%)"
+        fig.update_layout(**theme, xaxis_tickangle=-35)
 
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1250,6 +1294,7 @@ def render_overview() -> None:
                 color="Score",
                 color_continuous_scale="Blues",
                 range_color=[50, 100],
+                labels={"Score": "Avg Overall Score", "Category": "Category"},
             )
             fig_cat.update_layout(**plotly_theme(260), coloraxis_showscale=False)
             st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": True})
@@ -1327,10 +1372,14 @@ def render_performance() -> None:
             hover_name=COL_SUPPLIER,
             size_max=28,
             color_discrete_map={"Low": "#3fb950", "Medium": "#d29922", "High": "#f85149"},
+            labels={"Delivery": "On-Time Delivery (%)", "Quality": "Quality Score (%)"},
         )
         fig.add_vline(x=float(RULES["delivery_target"]), line_dash="dash", line_color="rgba(255,255,255,.25)")
         fig.add_hline(y=float(RULES["quality_target"]), line_dash="dash", line_color="rgba(255,255,255,.25)")
-        fig.update_layout(**plotly_theme(380), xaxis_title="Delivery %", yaxis_title="Quality %")
+        theme = plotly_theme(380)
+        theme["xaxis"]["title"] = "On-Time Delivery (%)"
+        theme["yaxis"]["title"] = "Quality Score (%)"
+        fig.update_layout(**theme)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1345,10 +1394,14 @@ def render_performance() -> None:
             hover_name=COL_SUPPLIER,
             size_max=28,
             color_discrete_map={"Low": "#3fb950", "Medium": "#d29922", "High": "#f85149"},
+            labels={"LeadTime": "Lead Time (Days)", "Complaint": "Complaint Rate (%)"},
         )
         fig.add_vline(x=float(RULES["leadtime_limit"]), line_dash="dash", line_color="rgba(255,255,255,.25)")
         fig.add_hline(y=float(RULES["complaint_limit"]), line_dash="dash", line_color="rgba(255,255,255,.25)")
-        fig.update_layout(**plotly_theme(380), xaxis_title="Lead Time Days", yaxis_title="Complaint Rate %")
+        theme = plotly_theme(380)
+        theme["xaxis"]["title"] = "Lead Time (Days)"
+        theme["yaxis"]["title"] = "Complaint Rate (%)"
+        fig.update_layout(**theme)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1440,10 +1493,12 @@ def render_spend_analysis() -> None:
     if not filt["Spend"].notna().any() or filt["Spend"].sum(skipna=True) <= 0:
         st.info("No Spend column was found in your Excel file. Add Spend / Annual_Spend / Total_Spend to activate real spend charts.")
         fallback = filt.groupby("Category", as_index=False)["Score"].mean().sort_values("Score", ascending=False)
-        fig = px.bar(fallback, x="Category", y="Score", color="Score", color_continuous_scale="Blues")
+        fig = px.bar(fallback, x="Category", y="Score", color="Score", color_continuous_scale="Blues",
+                     labels={"Category": "Category", "Score": "Avg Overall Score"})
     else:
         spend = filt.groupby("Category", as_index=False)["Spend"].sum().sort_values("Spend", ascending=False)
-        fig = px.bar(spend, x="Category", y="Spend", color="Spend", color_continuous_scale="Blues")
+        fig = px.bar(spend, x="Category", y="Spend", color="Spend", color_continuous_scale="Blues",
+                     labels={"Category": "Category", "Spend": "Total Spend"})
 
     fig.update_layout(**plotly_theme(420))
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
@@ -1502,6 +1557,7 @@ def render_country_insights() -> None:
             color="Score",
             color_continuous_scale="Blues",
             range_color=[50, 100],
+            labels={"Country": "Country", "Score": "Avg Overall Score"},
         )
 
         fig.update_layout(**plotly_theme(360), coloraxis_showscale=False)
@@ -1518,6 +1574,15 @@ def render_trends() -> None:
         key="trend_metric",
     )
 
+    axis_labels = {
+        "Score": "Overall Score",
+        "Delivery": "On-Time Delivery (%)",
+        "Quality": "Quality Score (%)",
+        "LeadTime": "Lead Time (Days)",
+        "Complaint": "Complaint Rate (%)",
+        "PriceDev": "Price Deviation (%)",
+    }
+
     ascending = metric in ["LeadTime", "Complaint", "PriceDev"]
     trend = filt.sort_values(metric, ascending=ascending).head(20)
 
@@ -1527,9 +1592,13 @@ def render_trends() -> None:
         y=metric,
         markers=True,
         hover_data=["Category", "Country", "Risk", "Score"],
+        labels={COL_SUPPLIER: "Supplier", metric: axis_labels.get(metric, metric)},
     )
 
-    fig.update_layout(**plotly_theme(430), xaxis_tickangle=-35)
+    theme = plotly_theme(430)
+    theme["xaxis"]["title"] = "Supplier"
+    theme["yaxis"]["title"] = axis_labels.get(metric, metric)
+    fig.update_layout(**theme, xaxis_tickangle=-35)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
     st.markdown("</div>", unsafe_allow_html=True)
 
