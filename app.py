@@ -9,9 +9,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PAGE CONFIG
-# ──────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="SupplierDash",
     page_icon="📦",
@@ -19,9 +16,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# COLUMN CONSTANTS
-# ──────────────────────────────────────────────────────────────────────────────
 COL_SUPPLIER = "Supplier_Name"
 COL_COUNTRY = "Country"
 COL_CATEGORY = "Category"
@@ -60,37 +54,26 @@ DEFAULT_SETTINGS = {
     "show_delivery_trend": True,
 }
 
-for key, value in DEFAULT_SETTINGS.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+CFG_PREFIX = "cfg_"
 
-# ──────────────────────────────────────────────────────────────────────────────
-# CSS — IMPORTANT: KEEP INSIDE st.markdown
-# ──────────────────────────────────────────────────────────────────────────────
+if "settings_version" not in st.session_state:
+    st.session_state["settings_version"] = 0
+
+for setting_key, default_value in DEFAULT_SETTINGS.items():
+    cfg_key = f"{CFG_PREFIX}{setting_key}"
+    if cfg_key not in st.session_state:
+        st.session_state[cfg_key] = default_value
+
 st.markdown(
     """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-}
+html, body, [class*="css"] { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important; }
+.stApp { background: #0d1117 !important; color: #e6edf3 !important; }
+.block-container { padding: 1rem 1.35rem 2rem 1.35rem !important; max-width: 100% !important; }
+#MainMenu, footer { visibility: hidden !important; }
 
-.stApp {
-    background: #0d1117 !important;
-    color: #e6edf3 !important;
-}
-
-.block-container {
-    padding: 1.0rem 1.35rem 2rem 1.35rem !important;
-    max-width: 100% !important;
-}
-
-#MainMenu, footer {
-    visibility: hidden !important;
-}
-
-/* Do not hide Streamlit header, otherwise sidebar cannot reopen */
 header[data-testid="stHeader"] {
     visibility: visible !important;
     background: transparent !important;
@@ -108,22 +91,15 @@ div[data-testid="collapsedControl"] {
     border-radius: 9px !important;
 }
 
-div[data-testid="collapsedControl"] * {
-    cursor: pointer !important;
-}
+div[data-testid="collapsedControl"] * { cursor: pointer !important; }
 
 section[data-testid="stSidebar"] {
     background: #161b22 !important;
     border-right: 1px solid #30363d !important;
 }
 
-section[data-testid="stSidebar"] > div {
-    padding: 0.8rem 0.75rem !important;
-}
-
-section[data-testid="stSidebar"] * {
-    color: #c9d1d9 !important;
-}
+section[data-testid="stSidebar"] > div { padding: 0.8rem 0.75rem !important; }
+section[data-testid="stSidebar"] * { color: #c9d1d9 !important; }
 
 .logo-box {
     font-size: 1.05rem;
@@ -151,24 +127,11 @@ div[role="radiogroup"] label {
     cursor: pointer !important;
 }
 
-div[role="radiogroup"] label:hover {
-    background: #21262d !important;
-}
+div[role="radiogroup"] label:hover { background: #21262d !important; }
+div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child { display: none !important; }
+div[role="radiogroup"] label p { font-size: 0.86rem !important; font-weight: 700 !important; }
+div[role="radiogroup"] * { cursor: pointer !important; }
 
-div[role="radiogroup"] label[data-baseweb="radio"] > div:first-child {
-    display: none !important;
-}
-
-div[role="radiogroup"] label p {
-    font-size: 0.86rem !important;
-    font-weight: 700 !important;
-}
-
-div[role="radiogroup"] * {
-    cursor: pointer !important;
-}
-
-/* Dropdown pointer cursor fix */
 .stSelectbox, .stSelectbox *, div[data-baseweb="select"], div[data-baseweb="select"] * {
     cursor: pointer !important;
 }
@@ -205,6 +168,16 @@ div[data-baseweb="select"] > div,
     border: 1px solid #30363d !important;
     color: #e6edf3 !important;
     border-radius: 9px !important;
+}
+
+/* light slider attempt */
+.stSlider div[data-baseweb="slider"] div { background-color: #30363d !important; }
+.stSlider div[data-baseweb="slider"] div[style*="width"] { background-color: #f0f6fc !important; }
+
+.stSlider div[role="slider"] {
+    background-color: #f0f6fc !important;
+    border: 2px solid #f0f6fc !important;
+    box-shadow: 0 0 0 2px #30363d !important;
 }
 
 .stButton > button {
@@ -248,15 +221,11 @@ div[data-baseweb="select"] > div,
 }
 
 @media (max-width: 1450px) {
-    .metric-grid {
-        grid-template-columns: repeat(3, minmax(160px, 1fr));
-    }
+    .metric-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
 }
 
 @media (max-width: 900px) {
-    .metric-grid {
-        grid-template-columns: repeat(1, minmax(160px, 1fr));
-    }
+    .metric-grid { grid-template-columns: repeat(1, minmax(160px, 1fr)); }
 }
 
 .kpi-card {
@@ -281,35 +250,11 @@ div[data-baseweb="select"] > div,
     flex-shrink: 0;
 }
 
-.kpi-label {
-    font-size: 0.76rem;
-    color: #8b949e;
-    font-weight: 700;
-}
-
-.kpi-value {
-    font-size: 1.55rem;
-    font-weight: 900;
-    color: #e6edf3;
-    line-height: 1.12;
-}
-
-.kpi-good {
-    font-size: 0.74rem;
-    color: #3fb950;
-    font-weight: 850;
-}
-
-.kpi-bad {
-    font-size: 0.74rem;
-    color: #f85149;
-    font-weight: 850;
-}
-
-.kpi-muted {
-    font-size: 0.72rem;
-    color: #6e7681;
-}
+.kpi-label { font-size: 0.76rem; color: #8b949e; font-weight: 700; }
+.kpi-value { font-size: 1.55rem; font-weight: 900; color: #e6edf3; line-height: 1.12; }
+.kpi-good { font-size: 0.74rem; color: #3fb950; font-weight: 850; }
+.kpi-bad { font-size: 0.74rem; color: #f85149; font-weight: 850; }
+.kpi-muted { font-size: 0.72rem; color: #6e7681; }
 
 .s-card {
     background: #161b22;
@@ -355,26 +300,10 @@ div[data-baseweb="select"] > div,
     border: 1px solid rgba(248,81,73,.35);
 }
 
-.alert-row {
-    border-bottom: 1px solid #21262d;
-    padding: 0.65rem 0;
-}
-
-.alert-row:last-child {
-    border-bottom: none;
-}
-
-.alert-name {
-    font-size: 0.86rem;
-    font-weight: 850;
-    color: #e6edf3;
-}
-
-.alert-desc {
-    font-size: 0.76rem;
-    color: #8b949e;
-    margin-top: 0.15rem;
-}
+.alert-row { border-bottom: 1px solid #21262d; padding: 0.65rem 0; }
+.alert-row:last-child { border-bottom: none; }
+.alert-name { font-size: 0.86rem; font-weight: 850; color: #e6edf3; }
+.alert-desc { font-size: 0.76rem; color: #8b949e; margin-top: 0.15rem; }
 
 .alert-badge-high,
 .alert-badge-med {
@@ -408,10 +337,7 @@ div[data-baseweb="select"] > div,
     font-weight: 900;
 }
 
-.stDataFrame {
-    border-radius: 10px !important;
-    overflow: hidden !important;
-}
+.stDataFrame { border-radius: 10px !important; overflow: hidden !important; }
 
 div[data-testid="stDataFrame"] {
     border: 1px solid #30363d !important;
@@ -422,22 +348,33 @@ div[data-testid="stDataFrame"] {
     unsafe_allow_html=True,
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# SETTINGS HELPERS
-# ──────────────────────────────────────────────────────────────────────────────
+
+def cfg_key(setting_key: str) -> str:
+    return f"{CFG_PREFIX}{setting_key}"
+
+
+def cfg_get(setting_key: str):
+    return st.session_state[cfg_key(setting_key)]
+
+
+def cfg_set(setting_key: str, value) -> None:
+    st.session_state[cfg_key(setting_key)] = value
+
+
 def reset_settings() -> None:
-    for key, value in DEFAULT_SETTINGS.items():
-        st.session_state[key] = value
+    for setting_key, default_value in DEFAULT_SETTINGS.items():
+        st.session_state[cfg_key(setting_key)] = default_value
+    st.session_state["settings_version"] = int(st.session_state.get("settings_version", 0)) + 1
 
 
 def get_rules() -> dict:
     return {
-        "delivery_target": float(st.session_state["delivery_target"]),
-        "quality_target": float(st.session_state["quality_target"]),
-        "leadtime_limit": float(st.session_state["leadtime_limit"]),
-        "complaint_limit": float(st.session_state["complaint_limit"]),
-        "price_dev_tolerance": float(st.session_state["price_dev_tolerance"]),
-        "anomaly_sensitivity": str(st.session_state["anomaly_sensitivity"]),
+        "delivery_target": float(cfg_get("delivery_target")),
+        "quality_target": float(cfg_get("quality_target")),
+        "leadtime_limit": float(cfg_get("leadtime_limit")),
+        "complaint_limit": float(cfg_get("complaint_limit")),
+        "price_dev_tolerance": float(cfg_get("price_dev_tolerance")),
+        "anomaly_sensitivity": str(cfg_get("anomaly_sensitivity")),
     }
 
 
@@ -482,9 +419,7 @@ def get_effective_rules() -> dict:
 
 RULES = get_effective_rules()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# GENERAL HELPERS
-# ──────────────────────────────────────────────────────────────────────────────
+
 def clean_cols(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
     return df
@@ -597,7 +532,7 @@ def country_flag(country: str) -> str:
 
 def country_with_flag(country: str) -> str:
     text = str(country).strip()
-    if st.session_state["show_country_flags"]:
+    if bool(cfg_get("show_country_flags")):
         return f"{country_flag(text)} {text}"
     return text
 
@@ -661,9 +596,6 @@ def load_excel(uploaded_file) -> pd.DataFrame:
     return clean_cols(pd.read_excel(uploaded_file))
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# SIDEBAR
-# ──────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div class="logo-box">📦 SupplierDash</div>', unsafe_allow_html=True)
 
@@ -689,9 +621,6 @@ with st.sidebar:
     page = st.radio("Navigation", page_options, index=0, label_visibility="collapsed", key="page_nav")
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# HEADER + UPLOAD
-# ──────────────────────────────────────────────────────────────────────────────
 now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
 st.markdown(
     f"""
@@ -713,40 +642,104 @@ with note_col:
     st.caption("Upload your supplier KPI Excel file. Filters, charts, settings, tables, and selected supplier profile update automatically.")
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# SETTINGS PAGE
-# ──────────────────────────────────────────────────────────────────────────────
 def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFrame | None = None) -> None:
     st.markdown('<div class="s-card"><div class="s-card-title">⚙️ Dashboard Settings</div>', unsafe_allow_html=True)
     st.caption("These settings control KPI cards, anomaly detection, risk scoring, profile colors, and supplier table display.")
 
+    version = int(st.session_state.get("settings_version", 0))
     s1, s2 = st.columns(2)
 
     with s1:
         st.markdown("#### KPI Targets")
-        st.slider("Delivery target (%)", 50.0, 100.0, key="delivery_target", step=0.5)
-        st.slider("Quality target (%)", 50.0, 100.0, key="quality_target", step=0.5)
-        st.slider("Lead time limit (days)", 1.0, 60.0, key="leadtime_limit", step=0.5)
-        st.slider("Complaint rate limit (%)", 0.0, 20.0, key="complaint_limit", step=0.1)
-        st.slider("Price deviation tolerance (+/- %)", 0.0, 25.0, key="price_dev_tolerance", step=0.1)
+        new_delivery_target = st.slider(
+            "Delivery target (%)",
+            50.0,
+            100.0,
+            value=float(cfg_get("delivery_target")),
+            step=0.5,
+            key=f"w_delivery_target_{version}",
+        )
+        new_quality_target = st.slider(
+            "Quality target (%)",
+            50.0,
+            100.0,
+            value=float(cfg_get("quality_target")),
+            step=0.5,
+            key=f"w_quality_target_{version}",
+        )
+        new_leadtime_limit = st.slider(
+            "Lead time limit (days)",
+            1.0,
+            60.0,
+            value=float(cfg_get("leadtime_limit")),
+            step=0.5,
+            key=f"w_leadtime_limit_{version}",
+        )
+        new_complaint_limit = st.slider(
+            "Complaint rate limit (%)",
+            0.0,
+            20.0,
+            value=float(cfg_get("complaint_limit")),
+            step=0.1,
+            key=f"w_complaint_limit_{version}",
+        )
+        new_price_dev_tolerance = st.slider(
+            "Price deviation tolerance (+/- %)",
+            0.0,
+            25.0,
+            value=float(cfg_get("price_dev_tolerance")),
+            step=0.1,
+            key=f"w_price_dev_tolerance_{version}",
+        )
 
     with s2:
         st.markdown("#### Anomaly & Display")
-        st.selectbox(
+
+        sensitivity_options = ["Low", "Medium", "High"]
+        current_sensitivity = str(cfg_get("anomaly_sensitivity"))
+        sensitivity_index = sensitivity_options.index(current_sensitivity) if current_sensitivity in sensitivity_options else 1
+
+        new_anomaly_sensitivity = st.selectbox(
             "Anomaly sensitivity",
-            ["Low", "Medium", "High"],
-            index=["Low", "Medium", "High"].index(st.session_state["anomaly_sensitivity"]),
-            key="anomaly_sensitivity",
+            sensitivity_options,
+            index=sensitivity_index,
+            key=f"w_anomaly_sensitivity_{version}",
             help="Low = fewer alerts, Medium = normal rules, High = stricter alerts.",
         )
-        st.slider("Top supplier table rows", 5, 50, key="top_supplier_rows", step=1)
-        st.checkbox("Show country flags", key="show_country_flags")
-        st.checkbox("Show delivery trend line in Top Suppliers", key="show_delivery_trend")
+
+        new_top_supplier_rows = st.slider(
+            "Top supplier table rows",
+            5,
+            50,
+            value=int(cfg_get("top_supplier_rows")),
+            step=1,
+            key=f"w_top_supplier_rows_{version}",
+        )
+
+        new_show_country_flags = st.checkbox(
+            "Show country flags",
+            value=bool(cfg_get("show_country_flags")),
+            key=f"w_show_country_flags_{version}",
+        )
+
+        new_show_delivery_trend = st.checkbox(
+            "Show delivery trend line in Top Suppliers",
+            value=bool(cfg_get("show_delivery_trend")),
+            key=f"w_show_delivery_trend_{version}",
+        )
 
         st.markdown("#### Reset")
-        if st.button("Reset all settings to default"):
-            reset_settings()
-            st.rerun()
+        st.button("Reset all settings to default", on_click=reset_settings)
+
+    cfg_set("delivery_target", new_delivery_target)
+    cfg_set("quality_target", new_quality_target)
+    cfg_set("leadtime_limit", new_leadtime_limit)
+    cfg_set("complaint_limit", new_complaint_limit)
+    cfg_set("price_dev_tolerance", new_price_dev_tolerance)
+    cfg_set("anomaly_sensitivity", new_anomaly_sensitivity)
+    cfg_set("top_supplier_rows", new_top_supplier_rows)
+    cfg_set("show_country_flags", new_show_country_flags)
+    cfg_set("show_delivery_trend", new_show_delivery_trend)
 
     effective = get_effective_rules()
 
@@ -796,9 +789,6 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# NO FILE YET
-# ──────────────────────────────────────────────────────────────────────────────
 if uploaded_file is None:
     if page == "⚙️ Settings":
         render_settings()
@@ -821,9 +811,6 @@ if uploaded_file is None:
     st.stop()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# LOAD AND PROCESS DATA
-# ──────────────────────────────────────────────────────────────────────────────
 raw = load_excel(uploaded_file)
 
 AUTO_MAP = {
@@ -839,7 +826,7 @@ AUTO_MAP = {
     COL_STATUS: ["status", "supplier_status", "supplier status", "risk_status"],
     COL_ANOMALY: ["anomaly_flag", "anomaly", "anomalieflag", "is_anomaly"],
     COL_ID: ["supplier_id", "supplier id", "id", "lieferant_id"],
-    COL_SPEND: ["spend", "spend_under_management", "annual_spend", "total_spend", "purchase_value", "value"],
+    COL_SPEND: ["spend", "spend_under_management", "annual_spend", "total_spend", "purchase_value", "value", "spend amount"],
     COL_NOTES: ["notes", "comment", "comments", "remark", "remarks"],
 }
 
@@ -919,25 +906,15 @@ for numeric_col in ["Delivery", "LeadTime", "Quality", "Complaint", "PriceDev", 
         agg[numeric_col] = pd.to_numeric(agg[numeric_col], errors="coerce").round(2)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# SETTINGS ROUTE AFTER FILE UPLOAD
-# ──────────────────────────────────────────────────────────────────────────────
 if page == "⚙️ Settings":
     render_settings(raw_data=raw, clean_data=df)
     st.markdown(
-        """
-<div style="text-align:center;color:#6e7681;font-size:.75rem;padding:24px 0 8px;">
-SupplierDash · Interactive KPI Monitoring · Powered by Streamlit
-</div>
-""",
+        '<div style="text-align:center;color:#6e7681;font-size:.75rem;padding:24px 0 8px;">SupplierDash · Interactive KPI Monitoring · Powered by Streamlit</div>',
         unsafe_allow_html=True,
     )
     st.stop()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# FILTERS
-# ──────────────────────────────────────────────────────────────────────────────
 f1, f2, f3, f4, f5 = st.columns([1.35, 1.35, 1.28, 1.28, 2.15])
 
 with f1:
@@ -989,9 +966,6 @@ if "selected_supplier" not in st.session_state or st.session_state["selected_sup
     st.session_state["selected_supplier"] = supplier_names[0]
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# KPI CARDS
-# ──────────────────────────────────────────────────────────────────────────────
 avg_delivery = filt["Delivery"].mean()
 avg_lead = filt["LeadTime"].mean()
 avg_quality = filt["Quality"].mean()
@@ -1061,9 +1035,6 @@ st.markdown(
 )
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# COMPONENTS
-# ──────────────────────────────────────────────────────────────────────────────
 def render_supplier_selector() -> pd.Series:
     selected = st.selectbox(
         "Click to view supplier profile →",
@@ -1119,7 +1090,7 @@ def render_supplier_profile(row: pd.Series) -> None:
 
 def render_top_table(data: pd.DataFrame, rows: int | None = None) -> None:
     if rows is None:
-        rows = int(st.session_state["top_supplier_rows"])
+        rows = int(cfg_get("top_supplier_rows"))
 
     table_df = data[
         [
@@ -1155,7 +1126,7 @@ def render_top_table(data: pd.DataFrame, rows: int | None = None) -> None:
         "Score",
     ]
 
-    if st.session_state["show_delivery_trend"]:
+    if bool(cfg_get("show_delivery_trend")):
         table_df["Delivery Trend"] = table_df.apply(
             lambda row: stable_trend(row["Delivery"], row[COL_SUPPLIER]),
             axis=1,
@@ -1215,7 +1186,7 @@ def render_top_table(data: pd.DataFrame, rows: int | None = None) -> None:
         ),
     }
 
-    if st.session_state["show_delivery_trend"]:
+    if bool(cfg_get("show_delivery_trend")):
         column_config["Delivery Trend"] = st.column_config.LineChartColumn(
             "Delivery Trend",
             y_min=0,
@@ -1232,9 +1203,6 @@ def render_top_table(data: pd.DataFrame, rows: int | None = None) -> None:
     )
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PAGES
-# ──────────────────────────────────────────────────────────────────────────────
 def render_overview() -> None:
     left, right = st.columns([3.1, 1.1])
 
@@ -1314,6 +1282,7 @@ def render_overview() -> None:
             for _, anomaly in anomalies.iterrows():
                 badge_class = "alert-badge-high" if anomaly["Score"] < 75 else "alert-badge-med"
                 level = "High" if anomaly["Score"] < 75 else "Medium"
+
                 st.markdown(
                     f"""
 <div class="alert-row">
@@ -1321,7 +1290,7 @@ def render_overview() -> None:
     <span class="alert-name">{anomaly[COL_SUPPLIER]}</span><span class="{badge_class}">{level}</span>
   </div>
   <div class="alert-desc">{issue_text(anomaly)}</div>
-  <div class="kpi-muted">{anomaly['Category']} · {country_with_flag(anomaly['Country'])}</div>
+  <div class="kpi-muted">{anomaly["Category"]} · {country_with_flag(anomaly["Country"])}</div>
 </div>
 """,
                     unsafe_allow_html=True,
@@ -1408,8 +1377,10 @@ def render_anomalies() -> None:
                 "Issue",
             ]
         ].copy()
+
         show["Country"] = show["Country"].apply(country_with_flag)
         show["PriceDev"] = show["PriceDev"].apply(price_signal)
+
         show = show.rename(
             columns={
                 COL_SUPPLIER: "Supplier",
@@ -1420,6 +1391,7 @@ def render_anomalies() -> None:
                 "PriceDev": "Price Dev %",
             }
         )
+
         st.dataframe(show, use_container_width=True, hide_index=True, height=500)
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1446,6 +1418,7 @@ def render_scorecards() -> None:
 
     scorecard["Country"] = scorecard["Country"].apply(country_with_flag)
     scorecard["PriceDev"] = scorecard["PriceDev"].apply(price_signal)
+
     scorecard = scorecard.rename(
         columns={
             COL_SUPPLIER: "Supplier",
@@ -1456,8 +1429,8 @@ def render_scorecards() -> None:
             "PriceDev": "Price Dev %",
         }
     )
-    st.dataframe(scorecard, use_container_width=True, hide_index=True, height=500)
 
+    st.dataframe(scorecard, use_container_width=True, hide_index=True, height=500)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -1488,6 +1461,7 @@ def render_category_insights() -> None:
         Avg_Lead_Time=("LeadTime", "mean"),
         Alerts=("Anomalies", "sum"),
     )
+
     category = category.round(2).sort_values("Avg_Score", ascending=False)
     st.dataframe(category, use_container_width=True, hide_index=True)
 
@@ -1499,21 +1473,37 @@ def render_country_insights() -> None:
 
     with c1:
         st.markdown('<div class="s-card"><div class="s-card-title">🌍 Suppliers by Country</div>', unsafe_allow_html=True)
+
         country = (
             filt.groupby("Country", as_index=False)
-            .agg(Suppliers=(COL_SUPPLIER, "count"), Avg_Score=("Score", "mean"), Alerts=("Anomalies", "sum"))
+            .agg(
+                Suppliers=(COL_SUPPLIER, "count"),
+                Avg_Score=("Score", "mean"),
+                Alerts=("Anomalies", "sum"),
+            )
             .round(2)
             .sort_values("Suppliers", ascending=False)
         )
+
         country["Country"] = country["Country"].apply(country_with_flag)
         st.dataframe(country, use_container_width=True, hide_index=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with c2:
         st.markdown('<div class="s-card"><div class="s-card-title">🌍 Country Score Chart</div>', unsafe_allow_html=True)
+
         country_score = filt.groupby("Country", as_index=False)["Score"].mean().sort_values("Score", ascending=False)
         country_score["Country"] = country_score["Country"].apply(country_with_flag)
-        fig = px.bar(country_score, x="Country", y="Score", color="Score", color_continuous_scale="Blues", range_color=[50, 100])
+
+        fig = px.bar(
+            country_score,
+            x="Country",
+            y="Score",
+            color="Score",
+            color_continuous_scale="Blues",
+            range_color=[50, 100],
+        )
+
         fig.update_layout(**plotly_theme(360), coloraxis_showscale=False)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1522,14 +1512,25 @@ def render_country_insights() -> None:
 def render_trends() -> None:
     st.markdown('<div class="s-card"><div class="s-card-title">📊 KPI Trends / Ranking</div>', unsafe_allow_html=True)
 
-    metric = st.selectbox("Choose KPI", ["Score", "Delivery", "Quality", "LeadTime", "Complaint", "PriceDev"], key="trend_metric")
+    metric = st.selectbox(
+        "Choose KPI",
+        ["Score", "Delivery", "Quality", "LeadTime", "Complaint", "PriceDev"],
+        key="trend_metric",
+    )
+
     ascending = metric in ["LeadTime", "Complaint", "PriceDev"]
     trend = filt.sort_values(metric, ascending=ascending).head(20)
 
-    fig = px.line(trend, x=COL_SUPPLIER, y=metric, markers=True, hover_data=["Category", "Country", "Risk", "Score"])
+    fig = px.line(
+        trend,
+        x=COL_SUPPLIER,
+        y=metric,
+        markers=True,
+        hover_data=["Category", "Country", "Risk", "Score"],
+    )
+
     fig.update_layout(**plotly_theme(430), xaxis_tickangle=-35)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
-
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -1540,9 +1541,6 @@ def render_placeholder(title: str, text: str) -> None:
     )
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# ROUTER
-# ──────────────────────────────────────────────────────────────────────────────
 if page == "🏠 Overview":
     render_overview()
 elif page == "👥 Suppliers":
@@ -1582,10 +1580,6 @@ elif page == "👤 Users & Roles":
     )
 
 st.markdown(
-    """
-<div style="text-align:center;color:#6e7681;font-size:.75rem;padding:24px 0 8px;">
-SupplierDash · Interactive KPI Monitoring · Powered by Streamlit
-</div>
-""",
+    '<div style="text-align:center;color:#6e7681;font-size:.75rem;padding:24px 0 8px;">SupplierDash · Interactive KPI Monitoring · Powered by Streamlit</div>',
     unsafe_allow_html=True,
 )
