@@ -369,13 +369,6 @@ def cfg_set(setting_key: str, value) -> None:
     st.session_state[cfg_key(setting_key)] = value
 
 
-def reset_settings() -> None:
-    """Reset all settings to defaults."""
-    for setting_key, default_value in DEFAULT_SETTINGS.items():
-        st.session_state[cfg_key(setting_key)] = default_value
-    st.rerun()
-
-
 def get_rules() -> dict:
     return {
         "delivery_target": float(cfg_get("delivery_target")),
@@ -737,10 +730,6 @@ def render_settings(raw_data: pd.DataFrame | None = None, clean_data: pd.DataFra
             key="w_show_delivery_trend",
         )
 
-        st.markdown("#### Reset")
-        if st.button("Reset all settings to default"):
-            reset_settings()
-
     # Write widget values back to cfg_ store AFTER widgets are rendered
     cfg_set("delivery_target", new_delivery_target)
     cfg_set("quality_target", new_quality_target)
@@ -918,6 +907,13 @@ for numeric_col in ["Delivery", "LeadTime", "Quality", "Complaint", "PriceDev", 
 
 
 if page == "⚙️ Settings":
+    # Handle reset at module level BEFORE rendering settings
+    reset_pressed = st.button("↻ Reset all settings to default", key="module_reset_btn")
+    if reset_pressed:
+        for k, v in DEFAULT_SETTINGS.items():
+            st.session_state[cfg_key(k)] = v
+        st.rerun()
+    
     render_settings(raw_data=raw, clean_data=df)
     st.markdown(
         '<div style="text-align:center;color:#6e7681;font-size:.75rem;padding:24px 0 8px;">SupplierDash · Interactive KPI Monitoring · Powered by Streamlit</div>',
