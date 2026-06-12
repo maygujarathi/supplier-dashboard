@@ -61,6 +61,7 @@ COL_NOTES = "Notes"
 COL_AUDIT = "Last_Audit_Date"
 COL_TOTAL_SHIP = "Total_Shipments"
 COL_ONTIME_SHIP = "On_Time_Shipments"
+COL_DATE = "Period_Date"  # optional time column for real time trends
 
 REQUIRED_COLS = [COL_SUPPLIER, COL_COUNTRY, COL_CATEGORY, COL_DELIVERY,
                  COL_LEADTIME, COL_QUALITY, COL_COMPLAINT, COL_PRICE_DEV]
@@ -91,6 +92,8 @@ AUTO_MAP: dict[str, list[str]] = {
     COL_AUDIT: ["lastauditdate", "auditdate", "lastaudit"],
     COL_TOTAL_SHIP: ["totalshipments", "shipments", "totaldeliveries"],
     COL_ONTIME_SHIP: ["ontimeshipments", "ontimedeliveries"],
+    COL_DATE: ["date", "month", "period", "reportingdate", "reportdate",
+               "snapshotdate", "kpidate", "datum", "monat", "periodend", "week"],
 }
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -239,6 +242,11 @@ div[data-baseweb="select"] > div,.stTextInput input,.stNumberInput input { backg
 .alert-badge-high,.alert-badge-med { padding:.13rem .45rem; border-radius:12px; font-size:.68rem; font-weight:900; }
 .alert-badge-high { background:rgba(248,81,73,.12); color:#f85149; border:1px solid rgba(248,81,73,.35); }
 .alert-badge-med { background:rgba(210,153,34,.12); color:#d29922; border:1px solid rgba(210,153,34,.35); }
+.chip-row { margin-top:.35rem; display:flex; flex-wrap:wrap; gap:4px; }
+.kpi-chip { padding:.12rem .5rem; border-radius:8px; font-size:.7rem; font-weight:800; white-space:nowrap;
+    background:rgba(248,81,73,.10); color:#f85149; border:1px solid rgba(248,81,73,.30); }
+.kpi-chip.amber { background:rgba(210,153,34,.10); color:#d29922; border-color:rgba(210,153,34,.30); }
+.chip-legend { font-size:.66rem; color:#6e7681; margin-bottom:.5rem; line-height:1.5; }
 .profile-avatar { width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg,#1f6feb,#58a6ff);
     display:flex; align-items:center; justify-content:center; color:white; font-weight:900; }
 .stDataFrame { border-radius:10px !important; overflow:hidden !important; }
@@ -302,18 +310,37 @@ def clean_numeric(series: pd.Series) -> pd.Series:
 
 
 def calc_score(row: pd.Series, rules: dict) -> float:
+    """Graded score: gentle 'excellence' deductions apply always (so two suppliers
+    above target still differ), hard penalties apply when a KPI breaches its target.
+    A perfect supplier (100% delivery, 100% quality, 0d lead, 0% complaints,
+    0% price deviation) scores 100; everyone else scores below it."""
     score = 100.0
+
+    # ── Gentle excellence deductions (always active) ──
+    if pd.notna(row.get(COL_DELIVERY)):
+        score -= max(0.0, 100.0 - row[COL_DELIVERY]) * 0.4
+    if pd.notna(row.get(COL_QUALITY)):
+        score -= max(0.0, 100.0 - row[COL_QUALITY]) * 0.5
+    if pd.notna(row.get(COL_LEADTIME)):
+        score -= max(0.0, row[COL_LEADTIME]) * 0.15
+    if pd.notna(row.get(COL_COMPLAINT)):
+        score -= max(0.0, row[COL_COMPLAINT]) * 1.0
+    if pd.notna(row.get(COL_PRICE_DEV)):
+        score -= abs(row[COL_PRICE_DEV]) * 0.4
+
+    # ── Hard penalties (only when target is breached) ──
     if pd.notna(row.get(COL_DELIVERY)) and row[COL_DELIVERY] < rules["delivery_target"]:
-        score -= (rules["delivery_target"] - row[COL_DELIVERY]) * 1.8
+        score -= (rules["delivery_target"] - row[COL_DELIVERY]) * 1.5
     if pd.notna(row.get(COL_LEADTIME)) and row[COL_LEADTIME] > rules["leadtime_limit"]:
-        score -= (row[COL_LEADTIME] - rules["leadtime_limit"]) * 2.0
+        score -= (row[COL_LEADTIME] - rules["leadtime_limit"]) * 1.8
     if pd.notna(row.get(COL_QUALITY)) and row[COL_QUALITY] < rules["quality_target"]:
-        score -= (rules["quality_target"] - row[COL_QUALITY]) * 2.5
+        score -= (rules["quality_target"] - row[COL_QUALITY]) * 2.0
     if pd.notna(row.get(COL_COMPLAINT)) and row[COL_COMPLAINT] > rules["complaint_limit"]:
-        score -= (row[COL_COMPLAINT] - rules["complaint_limit"]) * 8.0
+        score -= (row[COL_COMPLAINT] - rules["complaint_limit"]) * 6.0
     if pd.notna(row.get(COL_PRICE_DEV)) and abs(row[COL_PRICE_DEV]) > rules["price_dev_tolerance"]:
-        score -= (abs(row[COL_PRICE_DEV]) - rules["price_dev_tolerance"]) * 3.5
-    return max(round(score, 1), 0.0)
+        score -= (abs(row[COL_PRICE_DEV]) - rules["price_dev_tolerance"]) * 3.0
+
+    return float(np.clip(round(score, 1), 0.0, 100.0))
 
 
 def risk_label(score: float) -> str:
@@ -428,6 +455,27 @@ def issue_text(row: pd.Series, rules: dict) -> str:
     if pd.notna(row.get("PriceDev")) and abs(row["PriceDev"]) > rules["price_threshold"]:
         issues.append(f"Price deviation outside tolerance ({row['PriceDev']:+.2f}%)")
     return " · ".join(issues) if issues else "No critical KPI issue"
+
+
+def issue_chips(row: pd.Series, rules: dict) -> str:
+    """Compact, scannable chips — one per breached KPI — instead of sentences."""
+    chips = []
+    if pd.notna(row.get("Delivery")) and row["Delivery"] < rules["delivery_threshold"]:
+        sev = "" if row["Delivery"] < rules["delivery_threshold"] - 5 else " amber"
+        chips.append(f'<span class="kpi-chip{sev}" title="Delivery below {rules["delivery_threshold"]:.0f}% threshold">🚚 {row["Delivery"]:.1f}%</span>')
+    if pd.notna(row.get("Quality")) and row["Quality"] < rules["quality_threshold"]:
+        sev = "" if row["Quality"] < rules["quality_threshold"] - 5 else " amber"
+        chips.append(f'<span class="kpi-chip{sev}" title="Quality below {rules["quality_threshold"]:.0f}% threshold">🛡️ {row["Quality"]:.1f}%</span>')
+    if pd.notna(row.get("LeadTime")) and row["LeadTime"] > rules["leadtime_threshold"]:
+        sev = "" if row["LeadTime"] > rules["leadtime_threshold"] + 5 else " amber"
+        chips.append(f'<span class="kpi-chip{sev}" title="Lead time above {rules["leadtime_threshold"]:.0f}d threshold">⏱️ {row["LeadTime"]:.0f}d</span>')
+    if pd.notna(row.get("Complaint")) and row["Complaint"] > rules["complaint_threshold"]:
+        sev = "" if row["Complaint"] > rules["complaint_threshold"] * 3 else " amber"
+        chips.append(f'<span class="kpi-chip{sev}" title="Complaint rate above {rules["complaint_threshold"]:.1f}% limit">📣 {row["Complaint"]:.1f}%</span>')
+    if pd.notna(row.get("PriceDev")) and abs(row["PriceDev"]) > rules["price_threshold"]:
+        sev = "" if abs(row["PriceDev"]) > rules["price_threshold"] * 5 else " amber"
+        chips.append(f'<span class="kpi-chip{sev}" title="Price deviation outside ±{rules["price_threshold"]:.1f}% tolerance">💶 {row["PriceDev"]:+.1f}%</span>')
+    return '<div class="chip-row">' + "".join(chips) + "</div>" if chips else ""
 
 
 @st.cache_data(show_spinner=False)
@@ -667,6 +715,16 @@ if COL_ESG not in df.columns:
     df[COL_ESG] = np.nan
 if COL_AUDIT in df.columns:
     df[COL_AUDIT] = pd.to_datetime(df[COL_AUDIT], errors="coerce")
+if COL_DATE in df.columns:
+    df[COL_DATE] = pd.to_datetime(df[COL_DATE], errors="coerce")
+
+# A real time trend is only possible when the file contains a date/month column
+# with at least 2 distinct periods (i.e. multiple snapshots per supplier).
+HAS_TIME = (
+    COL_DATE in df.columns
+    and df[COL_DATE].notna().sum() > 0
+    and df[COL_DATE].dt.to_period("M").nunique() >= 2
+)
 
 # ── Scoring + anomalies (rules computed fresh, AFTER settings state) ──────
 RULES = get_effective_rules()
@@ -793,7 +851,8 @@ avg_lead = filt["LeadTime"].mean()
 avg_quality = filt["Quality"].mean()
 avg_complaint = filt["Complaint"].mean()
 active_suppliers = len(filt)
-anomaly_alerts = int(filt["Anomalies"].sum())
+anomaly_breaches = int(filt["Anomalies"].sum())
+flagged_suppliers = int((filt["Anomalies"] > 0).sum())
 _sel_score = float(_sel_row["Score"])
 _sel_color = score_color(_sel_score)
 _sel_name_short = str(_current_selected)[:18] + ("…" if len(str(_current_selected)) > 18 else "")
