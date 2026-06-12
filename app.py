@@ -17,7 +17,6 @@ Fixes vs previous version:
 
 from __future__ import annotations
 
-import hashlib
 import io
 import re
 from datetime import datetime
@@ -421,14 +420,6 @@ def fmt_spend(value: float) -> str:
     return f"€{value:.0f}"
 
 
-def stable_trend(base_value: float, name: str, points: int = 12, spread: float = 3.2) -> list[float]:
-    seed = int(hashlib.md5(str(name).encode("utf-8")).hexdigest()[:8], 16)
-    rng = np.random.default_rng(seed)
-    steps = rng.normal(0, spread / 4, points).cumsum()
-    trend = np.clip(float(base_value) + (steps - steps.mean()), 0, 100)
-    return [round(float(v), 1) for v in trend]
-
-
 def plotly_theme(height: int = 280) -> dict:
     return {
         "height": height,
@@ -551,7 +542,8 @@ def render_settings(raw_data: pd.DataFrame | None = None,
                      help="Low = fewer alerts · Medium = normal rules · High = stricter alerts.")
         st.slider("Top supplier table rows", 5, 50, step=1, key="top_supplier_rows")
         st.checkbox("Show country flags", key="show_country_flags")
-        st.checkbox("Show delivery trend line in Top Suppliers", key="show_delivery_trend")
+        st.checkbox("Show delivery trend sparkline in tables", key="show_delivery_trend",
+                    help="Only visible when your Excel contains a Date/Month column with multiple snapshots per supplier.")
 
         st.markdown("#### Reset")
         # on_click callback => runs before next rerun => safe to write widget keys
@@ -726,6 +718,18 @@ HAS_TIME = (
     and df[COL_DATE].dt.to_period("M").nunique() >= 2
 )
 
+# Per-supplier monthly delivery series for the table sparkline (REAL data only —
+# no synthetic trends; the sparkline column is hidden when there is no time data).
+DELIVERY_TREND_MAP: dict[str, list[float]] = {}
+if HAS_TIME:
+    _t = df.dropna(subset=[COL_DATE, COL_DELIVERY]).copy()
+    _t["_m"] = _t[COL_DATE].dt.to_period("M").dt.to_timestamp()
+    _series = _t.groupby([_t[COL_SUPPLIER].astype(str), "_m"])[COL_DELIVERY].mean().sort_index()
+    DELIVERY_TREND_MAP = {
+        name: [round(float(v), 1) for v in grp.values]
+        for name, grp in _series.groupby(level=0)
+    }
+
 # ── Scoring + anomalies (rules computed fresh, AFTER settings state) ──────
 RULES = get_effective_rules()
 
@@ -887,8 +891,8 @@ st.markdown(
   </div>
   <div class="kpi-card">
     <div class="kpi-icon" style="background:rgba(210,153,34,.12);">🔔</div>
-    <div><div class="kpi-label">Anomaly Alerts</div><div class="kpi-value">{anomaly_alerts}</div>
-    <div class="{'kpi-bad' if anomaly_alerts > 0 else 'kpi-good'}">{'requires attention' if anomaly_alerts > 0 else 'all clear'}</div></div>
+    <div><div class="kpi-label">Suppliers Flagged</div><div class="kpi-value">{flagged_suppliers}</div>
+    <div class="{'kpi-bad' if flagged_suppliers > 0 else 'kpi-good'}">{f'{anomaly_breaches} KPI breaches' if flagged_suppliers > 0 else 'all clear'}</div></div>
   </div>
   <div class="kpi-card">
     <div class="kpi-icon" style="background:rgba(88,166,255,.10);">🔍</div>
@@ -907,7 +911,7 @@ st.markdown(
 # ══════════════════════════════════════════════════════════════════════════
 def render_supplier_selector() -> pd.Series:
     selected = st.selectbox(
-        "Click to view supplier profile →", supplier_names,
+        "View supplier profile ↓", supplier_names,
         index=supplier_names.index(st.session_state["selected_supplier"]),
         key="selected_supplier",
     )
@@ -973,9 +977,10 @@ def render_top_table(data: pd.DataFrame, rows: int | None = None) -> None:
     display_cols = [COL_SUPPLIER, "Category", "CountryDisp", "Delivery", "Quality",
                     "LeadTime", "Complaint", "Price Signal", "Status", "Risk", "Score"]
 
-    if bool(st.session_state["show_delivery_trend"]):
-        table_df["Delivery Trend"] = table_df.apply(
-            lambda r: stable_trend(r["Delivery"], r[COL_SUPPLIER]), axis=1)
+    show_trend = bool(st.session_state["show_delivery_trend"]) and HAS_TIME
+    if show_trend:
+        table_df["Delivery Trend"] = table_df[COL_SUPPLIER].map(
+            lambda n: DELIVERY_TREND_MAP.get(str(n), []))
         display_cols.insert(4, "Delivery Trend")
 
     display_df = table_df[display_cols].rename(columns={
@@ -997,7 +1002,7 @@ def render_top_table(data: pd.DataFrame, rows: int | None = None) -> None:
         "Risk": st.column_config.TextColumn("Risk", width="small"),
         "Score": st.column_config.ProgressColumn("Score", format="%.1f", min_value=0, max_value=100, width="medium"),
     }
-    if bool(st.session_state["show_delivery_trend"]):
+    if show_trend:
         column_config["Delivery Trend"] = st.column_config.LineChartColumn("Delivery Trend", y_min=0, y_max=100, width="medium")
 
     st.dataframe(display_df, width="stretch", hide_index=True, height=460, column_config=column_config)
@@ -1009,20 +1014,38 @@ def render_top_table(data: pd.DataFrame, rows: int | None = None) -> None:
 def render_overview() -> None:
     left, right = st.columns([3.1, 1.1])
     with left:
-        st.markdown('<div class="s-card"><div class="s-card-title">📈 Supplier Performance Trend — Delivery vs Quality</div>', unsafe_allow_html=True)
-        trend = filt.sort_values("Score", ascending=False).head(15)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=trend[COL_SUPPLIER], y=trend["Delivery"], mode="lines+markers",
-                                 name="On-Time Delivery %", line=dict(color="#388bfd", width=2)))
-        fig.add_trace(go.Scatter(x=trend[COL_SUPPLIER], y=trend["Quality"], mode="lines+markers",
-                                 name="Quality Score %", line=dict(color="#3fb950", width=2)))
+        if HAS_TIME:
+            st.markdown('<div class="s-card"><div class="s-card-title">📈 KPI Trend Over Time — Delivery vs Quality</div>', unsafe_allow_html=True)
+            dft = df[df[COL_SUPPLIER].astype(str).isin(supplier_names)].copy()
+            dft["_month"] = dft[COL_DATE].dt.to_period("M").dt.to_timestamp()
+            ts = dft.groupby("_month", as_index=False).agg(
+                Delivery=(COL_DELIVERY, "mean"), Quality=(COL_QUALITY, "mean"))
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=ts["_month"], y=ts["Delivery"], mode="lines+markers",
+                                     name="On-Time Delivery %", line=dict(color="#388bfd", width=2)))
+            fig.add_trace(go.Scatter(x=ts["_month"], y=ts["Quality"], mode="lines+markers",
+                                     name="Quality Score %", line=dict(color="#3fb950", width=2)))
+            x_title = "Month"
+        else:
+            st.markdown('<div class="s-card"><div class="s-card-title">📊 Delivery vs Quality — Supplier Comparison (Top 15 by Score)</div>', unsafe_allow_html=True)
+            trend = filt.sort_values("Score", ascending=False).head(15)
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=trend[COL_SUPPLIER], y=trend["Delivery"], name="On-Time Delivery %",
+                                 marker_color="#388bfd", opacity=0.85))
+            fig.add_trace(go.Scatter(x=trend[COL_SUPPLIER], y=trend["Quality"], mode="lines+markers",
+                                     name="Quality Score %", line=dict(color="#3fb950", width=2)))
+            x_title = "Supplier"
         fig.add_hline(y=RULES["delivery_target"], line_dash="dash", line_color="rgba(56,139,253,.45)", annotation_text="Delivery target")
         fig.add_hline(y=RULES["quality_target"], line_dash="dash", line_color="rgba(63,185,80,.45)", annotation_text="Quality target")
         theme = plotly_theme(300)
-        theme["xaxis"]["title"] = "Supplier"
+        theme["xaxis"]["title"] = x_title
         theme["yaxis"]["title"] = "Score (%)"
-        fig.update_layout(**theme, xaxis_tickangle=-35)
+        fig.update_layout(**theme, xaxis_tickangle=-35 if not HAS_TIME else 0,
+                          barmode="group", yaxis_range=[None, 102])
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": True})
+        if not HAS_TIME:
+            st.caption("💡 This is a supplier comparison, not a time trend — your file has one snapshot per supplier. "
+                       "Add a **Date / Month** column with multiple rows per supplier and this chart automatically becomes a real KPI-over-time trend.")
         st.markdown("</div>", unsafe_allow_html=True)
 
         c1, c2 = st.columns(2)
@@ -1046,17 +1069,20 @@ def render_overview() -> None:
             st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown('<div class="s-card"><div class="s-card-title">🏆 Top Suppliers</div>', unsafe_allow_html=True)
-        render_supplier_selector()
         render_top_table(filt)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
-        selected = filt[filt[COL_SUPPLIER].astype(str) == st.session_state["selected_supplier"]].iloc[0]
-        st.markdown('<div class="s-card"><div class="s-card-title">⚠️ Anomaly Detection</div>', unsafe_allow_html=True)
-        anomalies = filt[filt["Anomalies"] > 0].sort_values("Score").head(6)
+        # Selector sits directly above the profile card it controls
+        selected_row = render_supplier_selector()
+        render_supplier_profile(selected_row)
+
+        st.markdown('<div class="s-card" style="margin-top:.8rem;"><div class="s-card-title">⚠️ Anomaly Detection</div>', unsafe_allow_html=True)
+        anomalies = filt[filt["Anomalies"] > 0].sort_values("Score").head(8)
         if anomalies.empty:
             st.success("No anomalies detected in current filters.")
         else:
+            st.markdown('<div class="chip-legend">🚚 Delivery · 🛡️ Quality · ⏱️ Lead time · 📣 Complaints · 💶 Price dev</div>', unsafe_allow_html=True)
             for _, a in anomalies.iterrows():
                 badge = "alert-badge-high" if a["Score"] < 75 else "alert-badge-med"
                 level = "High" if a["Score"] < 75 else "Medium"
@@ -1066,28 +1092,27 @@ def render_overview() -> None:
   <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
     <span class="alert-name">{a[COL_SUPPLIER]}</span><span class="{badge}">{level}</span>
   </div>
-  <div class="alert-desc">{issue_text(a, RULES)}</div>
-  <div class="kpi-muted">{a["Category"]} · {country_with_flag(a["Country"])}</div>
+  {issue_chips(a, RULES)}
+  <div class="kpi-muted" style="margin-top:.3rem;">{a["Category"]} · {country_with_flag(a["Country"])} · Score {a["Score"]:.0f}</div>
 </div>
 """,
                     unsafe_allow_html=True,
                 )
         st.markdown("</div>", unsafe_allow_html=True)
-        render_supplier_profile(selected)
 
 
 def render_suppliers() -> None:
     left, right = st.columns([2.45, 1])
+    with right:
+        selected_row = render_supplier_selector()
+        render_supplier_profile(selected_row)
     with left:
         st.markdown('<div class="s-card"><div class="s-card-title">👥 Supplier Directory</div>', unsafe_allow_html=True)
-        selected_row = render_supplier_selector()
         render_top_table(filt, rows=25)
         csv = filt.drop(columns=[c for c in ["Notes"] if c in filt.columns]).to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Download filtered suppliers (CSV)", csv,
                            file_name="suppliers_filtered.csv", mime="text/csv")
         st.markdown("</div>", unsafe_allow_html=True)
-    with right:
-        render_supplier_profile(selected_row)
 
 
 def render_performance() -> None:
